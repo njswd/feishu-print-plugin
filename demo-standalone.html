@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>打印排版插件 Demo（独立预览版）</title>
+<style>
+  :root{
+    --ink:#1f2329; --sub:#646a73; --line:#e5e6eb; --blue:#3370ff;
+    --blue-bg:#f0f4ff; --card:#f7f8fa; --ok:#0f8a4d;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:"Microsoft YaHei","PingFang SC",sans-serif; color:var(--ink); background:#eef0f3; font-size:14px;}
+  header{background:#fff; border-bottom:1px solid var(--line); padding:12px 24px; display:flex; align-items:center; justify-content:space-between;}
+  header h1{font-size:17px;}
+  header .tag{font-size:12px; color:var(--blue); background:var(--blue-bg); padding:3px 10px; border-radius:99px;}
+  .layout{display:flex; gap:16px; padding:16px 24px; align-items:flex-start;}
+  /* ---------- 左侧设置面板 ---------- */
+  .panel{width:300px; flex-shrink:0; background:#fff; border-radius:10px; padding:16px;}
+  .panel h2{font-size:14px; margin:14px 0 8px; color:var(--blue);}
+  .panel h2:first-child{margin-top:0;}
+  .panel label{display:block; font-size:12.5px; color:var(--sub); margin:8px 0 3px;}
+  .panel select,.panel input[type=number]{width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff;}
+  .panel textarea{width:100%; height:150px; padding:8px; border:1px solid var(--line); border-radius:6px; font-size:13px; font-family:Consolas,monospace; line-height:1.6; resize:vertical;}
+  .hint{font-size:11.5px; color:var(--sub); margin-top:4px;}
+  .chiprow{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+  .chip{font-size:11.5px; background:var(--blue-bg); color:var(--blue); border:none; padding:3px 9px; border-radius:99px; cursor:pointer;}
+  .chip:hover{background:#dbe6ff;}
+  .btn{display:block; width:100%; padding:10px; border:none; border-radius:8px; font-size:14px; cursor:pointer; margin-top:14px;}
+  .btn-print{background:var(--blue); color:#fff; font-weight:600;}
+  .btn-print:hover{background:#2860e1;}
+  /* ---------- 右侧预览区 ---------- */
+  .preview{flex:1; min-width:0;}
+  .preview-title{font-size:13px; color:var(--sub); margin-bottom:10px;}
+  .paper{background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.12); margin:0 auto 20px; position:relative; overflow:hidden;}
+  .paper-label{position:absolute; top:6px; right:10px; font-size:11px; color:#bbb;}
+  .tpl{line-height:1.9; font-size:14px; white-space:pre-wrap; word-break:break-all;}
+  table.grid{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.grid th, table.grid td{border:1px solid #444; padding:6px 8px; text-align:left;}
+  table.grid th{background:#f2f2f2;}
+  /* ---------- 打印 CSS：核心 ---------- */
+  @media print {
+    body *{visibility:hidden;}
+    #printArea, #printArea *{visibility:visible;}
+    #printArea{position:absolute; left:0; top:0; width:100%;}
+    .paper{box-shadow:none; margin:0; page-break-after:always;}
+    .paper:last-child{page-break-after:auto;}
+    .paper-label{display:none;}
+    @page{margin:0;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🖨️ 打印排版插件 Demo</h1>
+  <span class="tag">独立预览版 · 数据为模拟 · 点"打印"可真出纸/存PDF</span>
+</header>
+
+<div class="layout">
+  <!-- ============ 设置面板 ============ -->
+  <div class="panel">
+    <h2>① 纸张设置</h2>
+    <label>纸张大小</label>
+    <select id="paperSize">
+      <option value="A4">A4（210 × 297 mm）</option>
+      <option value="A5">A5（148 × 210 mm）</option>
+      <option value="letter">信纸 Letter</option>
+    </select>
+    <label>方向</label>
+    <select id="orient">
+      <option value="portrait">竖版</option>
+      <option value="landscape">横版</option>
+    </select>
+    <label>页边距（mm）</label>
+    <input type="number" id="margin" value="15" min="5" max="40">
+
+    <h2>② 排版模式</h2>
+    <select id="mode">
+      <option value="one">每条记录一页（合同/工单）</option>
+      <option value="table">每页 N 条表格（清单/花名册）</option>
+    </select>
+    <label>表格模式：每页行数 N</label>
+    <input type="number" id="perPage" value="8" min="1" max="30">
+
+    <h2>③ 打印模板（支持变量）</h2>
+    <textarea id="template">　　产 品 出 库 单
+
+客户名称：{{客户名称}}
+产品名称：{{产品名称}}
+箱型规格：{{箱型规格}}
+数量：{{数量}}　单位：{{单位}}
+备注：{{备注}}
+
+出货日期：{{出货日期}}　　经手人：________</textarea>
+    <div class="hint">点击字段名插入变量 ↓</div>
+    <div class="chiprow" id="fieldChips"></div>
+
+    <button class="btn btn-print" onclick="window.print()">🖨️ 打印 / 另存为 PDF</button>
+  </div>
+
+  <!-- ============ 预览区 ============ -->
+  <div class="preview">
+    <div class="preview-title">打印预览（所见即所得）</div>
+    <div id="printArea"></div>
+  </div>
+</div>
+
+<script>
+/* ================= 模拟数据（真实插件里来自飞书 SDK） ================= */
+var FIELDS = ["客户名称","产品名称","箱型规格","数量","单位","备注","出货日期"];
+var RECORDS = [
+  {"客户名称":"富士侨（南京）","产品名称":"免熏蒸木箱","箱型规格":"1200×1000×900","数量":"40","单位":"只","备注":"液冷服务器机柜，四面防撞条","出货日期":"2026-09-28"},
+  {"客户名称":"广达上海","产品名称":"胶合板托盘","箱型规格":"1200×1000×150","数量":"120","单位":"个","备注":"IPPC 标识已加印","出货日期":"2026-09-29"},
+  {"客户名称":"纬创昆山","产品名称":"钢边木箱","箱型规格":"1100×800×600","数量":"18","单位":"只","备注":"内衬防潮膜","出货日期":"2026-09-30"},
+  {"客户名称":"派能科技","产品名称":"免熏蒸木箱","箱型规格":"900×600×500","数量":"65","单位":"只","备注":"储能电池模组，防漏托盘","出货日期":"2026-10-02"},
+  {"客户名称":"南京苏威达","产品名称":"周转木架","箱型规格":"定制","数量":"30","单位":"套","备注":"发惠州中转仓","出货日期":"2026-10-08"}
+];
+
+var SIZES = { A4:[210,297], A5:[148,210], letter:[216,279] };
+
+function $(id){ return document.getElementById(id); }
+
+/* 字段变量 chips */
+(function(){
+  var row = $("fieldChips");
+  FIELDS.forEach(function(f){
+    var b = document.createElement("button");
+    b.className = "chip"; b.textContent = "{{"+f+"}}";
+    b.onclick = function(){
+      var t = $("template");
+      t.value += "{{"+f+"}}"; t.focus();
+    };
+    row.appendChild(b);
+  });
+})();
+
+function renderTemplate(tpl, data){
+  return tpl.replace(/\{\{(.*?)\}\}/g, function(_, name){
+    var v = data[name.trim()];
+    return (v === undefined || v === null) ? "" : String(v);
+  });
+}
+
+function render(){
+  var w = SIZES[$("paperSize").value][0], h = SIZES[$("paperSize").value][1];
+  if ($("orient").value === "landscape"){ var t = w; w = h; h = t; }
+  var m = parseInt($("margin").value) || 15;
+  var mode = $("mode").value, per = parseInt($("perPage").value) || 8;
+  var tpl = $("template").value;
+  var area = $("printArea");
+  area.innerHTML = "";
+
+  function newPaper(label){
+    var d = document.createElement("div");
+    d.className = "paper";
+    d.style.width = w + "mm"; d.style.height = h + "mm";
+    d.style.padding = m + "mm";
+    var lb = document.createElement("span");
+    lb.className = "paper-label"; lb.textContent = label;
+    d.appendChild(lb);
+    area.appendChild(d);
+    return d;
+  }
+
+  if (mode === "one"){
+    RECORDS.forEach(function(rec, i){
+      var p = newPaper("第 " + (i+1) + " 页 / 共 " + RECORDS.length + " 页");
+      var div = document.createElement("div");
+      div.className = "tpl";
+      div.textContent = renderTemplate(tpl, rec);
+      p.appendChild(div);
+    });
+  } else {
+    for (var i = 0; i < RECORDS.length; i += per){
+      var page = Math.floor(i / per) + 1;
+      var total = Math.ceil(RECORDS.length / per);
+      var p = newPaper("第 " + page + " 页 / 共 " + total + " 页");
+      var tbl = document.createElement("table");
+      tbl.className = "grid";
+      var thead = "<tr>" + FIELDS.map(function(f){ return "<th>"+f+"</th>"; }).join("") + "</tr>";
+      var rows = RECORDS.slice(i, i + per).map(function(rec){
+        return "<tr>" + FIELDS.map(function(f){ return "<td>"+(rec[f]||"")+"</td>"; }).join("") + "</tr>";
+      }).join("");
+      tbl.innerHTML = thead + rows;
+      p.appendChild(tbl);
+    }
+  }
+}
+
+["paperSize","orient","margin","mode","perPage","template"].forEach(function(id){
+  $(id).addEventListener("input", render);
+  $(id).addEventListener("change", render);
+});
+render();
+</script>
+</body>
+</html>
