@@ -1,125 +1,141 @@
-/* ===== 打印排版助手样式（含打印 CSS） ===== */
+/* ===== 打印排版助手样式（拖拽排版版）===== */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 .app {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
   height: 100vh;
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 14px;
   color: #1f2329;
   background: #eef0f3;
-  padding: 12px;
 }
 
-.err { padding: 24px; color: #d83931; font-family: "Microsoft YaHei", sans-serif; }
+.err { padding: 24px; color: #d83931; }
 
-/* ---------- 设置面板 ---------- */
-.panel {
-  width: 300px;
-  flex-shrink: 0;
+/* ---------- 顶部工具栏 ---------- */
+.toolbar {
+  height: 48px;
   background: #fff;
-  border-radius: 10px;
-  padding: 14px;
-  overflow-y: auto;
-}
-.panel h3 { font-size: 13px; color: #3370ff; margin: 14px 0 6px; }
-.panel h3:first-child { margin-top: 0; }
-.panel select,
-.panel input {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #e5e6eb;
-  border-radius: 6px;
-  font-size: 13px;
-  margin-bottom: 6px;
-  background: #fff;
-}
-.panel .row { display: flex; gap: 6px; }
-.panel .row > * { flex: 1; }
-.panel textarea {
-  width: 100%;
-  height: 140px;
-  padding: 8px;
-  border: 1px solid #e5e6eb;
-  border-radius: 6px;
-  font-size: 13px;
-  font-family: Consolas, monospace;
-  line-height: 1.6;
-  resize: vertical;
-}
-.record-list {
-  max-height: 180px;
-  overflow-y: auto;
-  border: 1px solid #e5e6eb;
-  border-radius: 6px;
-  padding: 4px;
-}
-.rec-item {
+  border-bottom: 1px solid #e5e6eb;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  font-size: 12.5px;
-  cursor: pointer;
-  border-radius: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  gap: 10px;
+  padding: 0 16px;
+  flex-shrink: 0;
 }
-.rec-item:hover { background: #f0f4ff; }
-.rec-item input { width: auto; margin: 0; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.chip {
-  font-size: 11.5px;
-  background: #f0f4ff;
-  color: #3370ff;
-  border: none;
-  padding: 3px 9px;
-  border-radius: 99px;
-  cursor: pointer;
+.toolbar h1 { font-size: 15px; }
+.toolbar .hint { font-size: 12px; color: #646a73; margin-left: auto; }
+.toolbar select,
+.toolbar input {
+  padding: 4px 8px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
 }
-.chip:hover { background: #dbe6ff; }
+.tabs { display: flex; background: #f7f8fa; border-radius: 8px; padding: 3px; }
+.tabs button {
+  border: none; background: none; padding: 5px 16px;
+  border-radius: 6px; font-size: 13px; cursor: pointer; color: #646a73;
+}
+.tabs button.on { background: #fff; color: #1f2329; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 .btn-print {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 14px;
-  background: #3370ff;
-  color: #fff;
+  background: #3370ff; color: #fff; border: none;
+  padding: 7px 18px; border-radius: 8px; font-size: 13px;
+  cursor: pointer; font-weight: 600;
 }
 .btn-print:hover { background: #2860e1; }
 
-/* ---------- 预览区 ---------- */
-.preview { flex: 1; min-width: 0; overflow-y: auto; }
-.preview-title { font-size: 12.5px; color: #646a73; margin-bottom: 10px; }
-.paper {
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
-  margin: 0 auto 20px;
-  position: relative;
-  overflow: hidden;
+/* ---------- 主区域 ---------- */
+.layout { display: flex; flex: 1; min-height: 0; }
+.sidebar {
+  width: 270px; flex-shrink: 0; background: #fff;
+  border-right: 1px solid #e5e6eb; overflow-y: auto; padding: 12px;
 }
-.paper-label { position: absolute; top: 6px; right: 10px; font-size: 11px; color: #bbb; }
-.tpl { line-height: 1.9; font-size: 14px; white-space: pre-wrap; word-break: break-all; }
-table.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-table.grid th, table.grid td { border: 1px solid #444; padding: 6px 8px; text-align: left; }
-table.grid th { background: #f2f2f2; }
+.stage { flex: 1; overflow: auto; padding: 24px; background: #e2e5ea; }
 
-/* ---------- 核心：打印样式 ---------- */
+.sec-title { font-size: 12px; color: #646a73; margin: 12px 0 6px; font-weight: 600; }
+.sec-title:first-child { margin-top: 0; }
+.palette { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pal-item {
+  border: 1px solid #e5e6eb; border-radius: 8px; padding: 10px 6px;
+  text-align: center; font-size: 13px; cursor: grab; background: #fff; user-select: none;
+}
+.pal-item:hover { border-color: #3370ff; color: #3370ff; background: #f0f4ff; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  font-size: 11.5px; background: #f0f4ff; color: #3370ff; border: none;
+  padding: 3px 9px; border-radius: 99px; cursor: pointer;
+}
+.chip:hover { background: #dbe6ff; }
+
+.prop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.prop-grid label { font-size: 11px; color: #646a73; display: block; }
+.prop-grid input, .prop-grid select {
+  width: 100%; padding: 4px 6px; border: 1px solid #e5e6eb;
+  border-radius: 5px; font-size: 12px;
+}
+.props textarea {
+  width: 100%; height: 64px; padding: 6px; border: 1px solid #e5e6eb;
+  border-radius: 5px; font-size: 12px; font-family: inherit; resize: vertical;
+}
+.btn-del {
+  width: 100%; margin-top: 8px; background: #fff1f0; color: #d83931;
+  border: 1px solid #ffccc7; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px;
+}
+.btn-del:hover { background: #ffccc7; }
+.empty-tip {
+  font-size: 12px; color: #646a73; padding: 8px;
+  background: #f7f8fa; border-radius: 6px; line-height: 1.6;
+}
+.fld-check { display: flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 0; }
+
+/* ---------- 纸张与画布元素 ---------- */
+.paper {
+  background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.15);
+  position: relative; margin: 0 auto 24px; overflow: hidden;
+}
+.paper.dragover { outline: 2px dashed #3370ff; outline-offset: -8px; }
+.paper-label { position: absolute; top: 5px; right: 10px; font-size: 11px; color: #c0c4cc; z-index: 1; }
+
+.el { position: absolute; cursor: move; user-select: none; }
+.el.selected { outline: 2px solid #3370ff; outline-offset: 1px; }
+.el .content { width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+.el .content.editable { pointer-events: auto; }
+.el .content[contenteditable]:focus { outline: 1px dashed #3370ff; }
+.resize-handle {
+  position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
+  background: #3370ff; border: 2px solid #fff; border-radius: 50%;
+  cursor: nwse-resize; display: none; z-index: 5;
+}
+.el.selected .resize-handle { display: block; }
+.el-text .content { line-height: 1.6; word-break: break-all; white-space: pre-wrap; }
+.el-line { border-top: 1.5px solid #333; }
+.el-table table { width: 100%; height: 100%; border-collapse: collapse; }
+.el-table td, .el-table th { border: 1px solid #444; padding: 2px 4px; font-size: 12px; }
+.el-autotable table { width: 100%; border-collapse: collapse; }
+.el-autotable td, .el-autotable th { border: 1px solid #444; padding: 3px 5px; font-size: 12px; text-align: left; }
+.el-autotable th { background: #f2f2f2; }
+.el-img img { width: 100%; height: 100%; object-fit: contain; }
+.el-qr, .el-bar { background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.qr-box img { width: 100%; height: 100%; }
+.lib-fallback { font-size: 10.5px; color: #999; text-align: center; padding: 4px; }
+
+/* ---------- 打印 CSS ---------- */
+#printArea { display: none; }
+body.printing #printArea { display: block; }
 @media print {
   body * { visibility: hidden; }
   #printArea, #printArea * { visibility: visible; }
-  #printArea { position: absolute; left: 0; top: 0; width: 100%; }
+  #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+  body { overflow: visible; background: #fff; }
   .paper { box-shadow: none; margin: 0; page-break-after: always; }
   .paper:last-child { page-break-after: auto; }
   .paper-label { display: none; }
-  table.grid tr, .tpl { break-inside: avoid; }
+  .el { outline: none !important; }
+  .el .content[contenteditable] { outline: none; }
+  .resize-handle { display: none !important; }
   @page { margin: 0; }
 }
