@@ -52,7 +52,7 @@
 }
 .tpl-item:hover .del { display: block; }
 .tpl-item .del:hover { color: var(--danger); }
-.side-foot { padding: 12px; border-top: 1px solid var(--line); }
+.side-foot { padding: 10px 12px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
 .btn-create {
   width: 100%; background: var(--blue); color: #fff; border: none;
   padding: 9px; border-radius: 8px; font-size: 13.5px;
@@ -60,6 +60,52 @@
 }
 .btn-create:hover { background: #2860e1; }
 .side-empty { font-size: 12px; color: #a0a6b0; padding: 4px 9px 8px; }
+
+/* ---------- v0.6 编辑器（对齐官方）---------- */
+.name-input {
+  border: 1px solid transparent; background: transparent; color: var(--ink);
+  font-size: 13px; font-weight: 600; padding: 4px 8px;
+  border-radius: 6px; width: 170px;
+}
+.name-input:hover { background: var(--card); }
+.name-input:focus { outline: none; border-color: var(--blue); background: #fff; }
+.tb-btn:disabled { opacity: .35; cursor: not-allowed; }
+.tb-btn:disabled:hover { border-color: var(--line); color: var(--ink); }
+.tip-box {
+  background: #fff8e6; color: #8a6116; font-size: 11.5px; line-height: 1.5;
+  border-radius: 8px; padding: 8px 10px; margin: 2px 0 10px;
+}
+.comp-list { display: flex; flex-direction: column; gap: 4px; }
+.comp-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border-radius: 8px; font-size: 13px;
+  cursor: grab; user-select: none; border: 1px solid transparent;
+}
+.comp-item:hover { background: var(--card); border-color: var(--line); }
+.comp-item .ic { width: 20px; text-align: center; }
+.canvas-top {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 0 10px; font-size: 11.5px; color: #a0a6b0;
+}
+.more-btn {
+  border: 1px solid var(--line); background: #fff; border-radius: 6px;
+  padding: 3px 10px; font-size: 12px; cursor: pointer;
+  color: var(--sub); white-space: nowrap;
+}
+.more-btn:hover { border-color: var(--blue); color: var(--blue); }
+.popover.right { left: auto; right: 0; }
+.pop-item {
+  display: block; width: 100%; text-align: left;
+  border: none; background: none; padding: 7px 8px;
+  font-size: 12.5px; cursor: pointer; border-radius: 6px; color: var(--ink);
+}
+.pop-item:hover { background: var(--card); }
+.fld-chip {
+  display: inline-block; border: 1px solid #f0473f; color: #f0473f;
+  background: #fff7f6; border-radius: 4px; padding: 0 4px; margin: 0 1px;
+  font-size: .9em; line-height: 1.5; white-space: nowrap;
+}
+.chip-caret { font-style: normal; opacity: .65; font-size: .85em; }
 
 /* ---------- 左侧：元素库 / 属性（编辑态）---------- */
 .sec-title { font-size: 12px; color: var(--sub); margin: 12px 0 6px; font-weight: 600; }
@@ -120,7 +166,7 @@
   padding: 4px 8px; border: 1px solid var(--line);
   border-radius: 6px; font-size: 13px; max-width: 170px;
 }
-.topbar .grow { flex: 1; }
+.grow { flex: 1; }
 .paper-chip {
   font-size: 12.5px; color: var(--ink); border: 1px solid var(--line);
   border-radius: 6px; padding: 4px 9px; cursor: pointer;

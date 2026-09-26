@@ -14,7 +14,10 @@ import { bitable } from "@lark-opdev/block-bitable-api";
 
 /* ---------------- 类型 ---------------- */
 
-type ElType = "text" | "line" | "table" | "autotable" | "image" | "qrcode" | "barcode" | "sign";
+type ElType = "text" | "line" | "table" | "autotable" | "image" | "qrcode" | "barcode" | "sign" | "attach" | "free" | "article";
+
+/** 文本类元素（共用属性面板与 {{字段}} chip 渲染） */
+const TEXT_LIKE: ElType[] = ["text", "free", "article", "attach"];
 
 interface ElProps {
   content?: string; src?: string; fontSize?: number; bold?: boolean;
@@ -32,15 +35,18 @@ const PAPER_MM: Record<string, [number, number]> = { A4: [210, 297], A5: [148, 2
 const MM = 3.78;
 const SAVE_KEY = "print-plugin-layout-v4";
 
-const PALETTE: { type: ElType; label: string }[] = [
-  { type: "text", label: "📝 文本" },
-  { type: "line", label: "━ 水平线" },
-  { type: "table", label: "▦ 表格" },
-  { type: "autotable", label: "🔁 自动表格" },
-  { type: "image", label: "🖼️ 图片" },
-  { type: "qrcode", label: "⊟ 二维码" },
-  { type: "barcode", label: "🕋 条形码" },
-  { type: "sign", label: "✍️ 签名" },
+const COMPONENTS: { type: ElType; icon: string; label: string }[] = [
+  { type: "text", icon: "🅰", label: "文本" },
+  { type: "table", icon: "▦", label: "表格" },
+  { type: "image", icon: "🖼️", label: "图片" },
+  { type: "attach", icon: "📎", label: "附件" },
+  { type: "qrcode", icon: "⊟", label: "二维码" },
+  { type: "barcode", icon: "🕋", label: "条形码" },
+  { type: "line", icon: "━", label: "水平线" },
+  { type: "free", icon: "✥", label: "自由拖动元素" },
+  { type: "article", icon: "📋", label: "文章区块" },
+  { type: "autotable", icon: "🔁", label: "自动表格" },
+  { type: "sign", icon: "✍️", label: "签名" },
 ];
 
 const DEFAULTS: Record<ElType, { w: number; h: number; props: ElProps }> = {
@@ -52,6 +58,9 @@ const DEFAULTS: Record<ElType, { w: number; h: number; props: ElProps }> = {
   qrcode: { w: 25, h: 25, props: { content: "https://example.com" } },
   barcode: { w: 45, h: 14, props: { content: "20260927001" } },
   sign: { w: 60, h: 22, props: {} },
+  attach: { w: 50, h: 10, props: { content: "📎 附件：{{附件}}", fontSize: 12 } },
+  free: { w: 60, h: 10, props: { content: "自由拖动元素", fontSize: 14 } },
+  article: { w: 100, h: 24, props: { content: "在这里输入文字，输入 {{字段}} 快速插入字段", fontSize: 12 } },
 };
 
 /** 导出 HTML 时内联的最小样式（与 print.css 中元素规则保持一致） */
@@ -85,7 +94,7 @@ function presetDingdan(): LayoutEl[] {
     { id: "p6", type: "text", x: 110, y: 44, w: 85, h: 22, props: { content: "发货地址：\n发货日期：{{出货日期}}", fontSize: 12 } },
     { id: "p7", type: "text", x: 15, y: 70, w: 60, h: 8, props: { content: "订购明细", fontSize: 13, bold: true } },
     { id: "p8", type: "autotable", x: 15, y: 80, w: 180, h: 50, props: {} },
-    { id: "p9", type: "text", x: 120, y: 134, w: 75, h: 8, props: { content: "合计：{{金额}}", fontSize: 12, bold: true, align: "right" } },
+    { id: "p9", type: "text", x: 120, y: 134, w: 75, h: 8, props: { content: "合计：{{SUM(金额)}}", fontSize: 12, bold: true, align: "right" } },
     { id: "p10", type: "sign", x: 130, y: 146, w: 60, h: 20, props: {} },
     { id: "p11", type: "text", x: 15, y: 172, w: 180, h: 14, props: { content: "如有任何疑问或需要进一步的信息，请随时与我们联系，感谢您的信任与合作！", fontSize: 10 } },
     { id: "p12", type: "text", x: 15, y: 186, w: 180, h: 8, props: { content: "联系人：王大锤　联系电话：19888888888　点火科技公司", fontSize: 10 } },
@@ -107,8 +116,9 @@ function presetChuku(): LayoutEl[] {
     { id: "p1", type: "text", x: 70, y: 12, w: 70, h: 12, props: { content: "产 品 出 库 单", fontSize: 22, bold: true, align: "center" } },
     { id: "p2", type: "text", x: 15, y: 30, w: 120, h: 10, props: { content: "日期：{{出货日期}}　经手人：________", fontSize: 12 } },
     { id: "p3", type: "autotable", x: 15, y: 45, w: 180, h: 60, props: {} },
-    { id: "p4", type: "text", x: 15, y: 112, w: 100, h: 10, props: { content: "审核：________", fontSize: 12 } },
-    { id: "p5", type: "qrcode", x: 170, y: 105, w: 25, h: 25, props: { content: "https://njswd.github.io/feishu-print-plugin/" } },
+    { id: "p4", type: "text", x: 95, y: 110, w: 100, h: 8, props: { content: "合计：{{SUM(金额)}}", fontSize: 12, bold: true, align: "right" } },
+    { id: "p5", type: "text", x: 15, y: 122, w: 100, h: 8, props: { content: "审核：________", fontSize: 12 } },
+    { id: "p5b", type: "qrcode", x: 170, y: 118, w: 25, h: 25, props: { content: "https://njswd.github.io/feishu-print-plugin/" } },
   ];
 }
 
@@ -117,11 +127,45 @@ function presetChuku(): LayoutEl[] {
 const esc = (s: unknown) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function renderTpl(tpl: string, data: Record<string, string> | null): string {
-  return String(tpl).replace(/\{\{(.*?)\}\}/g, (_, name: string) => {
-    const v = data ? data[name.trim()] : undefined;
+function renderTpl(tpl: string, data: Record<string, string> | null, rowsData?: Record<string, string>[]): string {
+  return String(tpl).replace(/\{\{(.*?)\}\}/g, (_, raw: string) => {
+    const m = raw.match(/^SUM\((.+)\)$/);
+    if (m) {
+      const name = m[1].trim();
+      const list = rowsData && rowsData.length ? rowsData : data ? [data] : [];
+      let sum = 0;
+      list.forEach((r) => { const n = parseFloat(r[name]); if (!isNaN(n)) sum += n; });
+      return String(Math.round(sum * 100) / 100);
+    }
+    const v = data ? data[raw.trim()] : undefined;
     return v === undefined || v === null ? "" : String(v);
   });
+}
+
+/* ---------- 编辑态字段 chip（对齐官方红色 chip）---------- */
+function chipLabel(f: string): string {
+  const m = f.match(/^SUM\((.+)\)$/);
+  return m ? "求和 · " + m[1].trim() : f;
+}
+function richEditHTML(raw: string | undefined): string {
+  return esc(raw || "").replace(/\{\{(.*?)\}\}/g, (_, f: string) =>
+    '<span class="fld-chip" data-raw="' + esc(f) + '">' + esc(chipLabel(f)) + ' <i class="chip-caret">⌄</i></span>'
+  );
+}
+/** 把编辑中的 DOM 还原为原始文本（chip → {{字段}}） */
+function richToRaw(node: HTMLElement): string {
+  let out = "";
+  node.childNodes.forEach((n) => {
+    if (n.nodeType === 3) out += n.nodeValue || "";
+    else if (n.nodeType === 1) {
+      const el = n as HTMLElement;
+      if (el.classList.contains("fld-chip")) out += "{{" + (el.dataset.raw || el.textContent || "") + "}}";
+      else if (el.tagName === "BR") out += "\n";
+      else if (el.tagName === "DIV" || el.tagName === "P") out += (out ? "\n" : "") + richToRaw(el);
+      else out += richToRaw(el);
+    }
+  });
+  return out;
 }
 
 function cellToText(v: unknown): string {
@@ -187,6 +231,7 @@ export default function App() {
   const [autoFields, setAutoFields] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [paperPop, setPaperPop] = useState(false);
+  const [morePop, setMorePop] = useState(false);
   const [signFor, setSignFor] = useState<string | null>(null);
   const [paper, setPaper] = useState("A4");
   const [landscape, setLandscape] = useState(false);
@@ -214,13 +259,59 @@ export default function App() {
   function setEls(next: LayoutEl[]) {
     patchTpl(currentTpl, (t) => ({ ...t, elements: next }));
   }
+  /** 统一修改元素并记录撤销历史 */
+  function mutateEls(fn: (list: LayoutEl[]) => LayoutEl[]) {
+    const next = fn(els);
+    setEls(next);
+    commit(next);
+  }
   function updateProps(id: string, patch: ElProps) {
-    setEls(els.map((it) => (it.id === id ? { ...it, props: { ...it.props, ...patch } } : it)));
+    mutateEls((list) => list.map((it) => (it.id === id ? { ...it, props: { ...it.props, ...patch } } : it)));
   }
   function nextElId(): string {
     let max = 0;
     templates.forEach((t) => t.elements.forEach((e) => { const n = parseInt(e.id.slice(1)); if (n > max) max = n; }));
     return "e" + Math.max(max + 1, idRef.current++);
+  }
+
+  /* ---------- 撤销 / 重做 / 清空（v0.6）---------- */
+  const histRef = useRef<{ stack: string[]; idx: number }>({ stack: [], idx: -1 });
+  const [, setHistTick] = useState(0);
+  function resetHist() { histRef.current = { stack: [JSON.stringify(els)], idx: 0 }; }
+  function commit(next?: LayoutEl[]) {
+    const h = histRef.current;
+    const s = JSON.stringify(next !== undefined ? next : els);
+    if (h.stack[h.idx] === s) return;
+    h.stack = h.stack.slice(0, h.idx + 1);
+    h.stack.push(s);
+    if (h.stack.length > 50) h.stack.shift();
+    h.idx = h.stack.length - 1;
+    setHistTick((t) => t + 1);
+  }
+  function undo() {
+    const h = histRef.current;
+    if (h.idx <= 0) return;
+    h.idx--;
+    setEls(JSON.parse(h.stack[h.idx]));
+    setSelectedId(null);
+    setHistTick((t) => t + 1);
+  }
+  function redo() {
+    const h = histRef.current;
+    if (h.idx >= h.stack.length - 1) return;
+    h.idx++;
+    setEls(JSON.parse(h.stack[h.idx]));
+    setSelectedId(null);
+    setHistTick((t) => t + 1);
+  }
+  function clearAll() {
+    if (!els.length) return;
+    if (!confirm("确定清空当前模板的所有元素？")) return;
+    mutateEls(() => []);
+    setSelectedId(null);
+  }
+  function showGuide() {
+    alert("快捷指南：\n\n1. 从左侧「组件」拖元素到纸张排版；\n2. 双击文本直接编辑，输入 {{字段名}} 引用表格字段，输入 {{SUM(金额)}} 对整页求和；\n3. 顶栏支持清空 / 撤销 / 重做；\n4. 右上「⋯ 更多」可修改纸张参数、导出 HTML；\n5. 新建模板：预览页左下角「＋ 创建模板」。");
   }
 
   /* ---------- 自动保存 / 加载 ---------- */
@@ -321,7 +412,7 @@ export default function App() {
       y: Math.max(0, Math.min((e.clientY - rect.top) / MM - pad, innerH - d.h)),
       w: d.w, h: d.h, props: JSON.parse(JSON.stringify(d.props)),
     };
-    setEls([...els, el]);
+    mutateEls((list) => [...list, el]);
     setSelectedId(el.id);
     dragType.current = null;
   }
@@ -331,38 +422,45 @@ export default function App() {
     if (kind === "move") setSelectedId(el.id);
     const startX = e.clientX, startY = e.clientY;
     const ox = el.x, oy = el.y, ow = el.w, oh = el.h;
+    let last: LayoutEl[] | null = null;
     function onMove(ev: MouseEvent) {
       const dx = (ev.clientX - startX) / MM, dy = (ev.clientY - startY) / MM;
-      setEls(
-        els.map((it) => {
-          if (it.id !== el.id) return it;
-          if (kind === "move") return { ...it, x: ox + dx, y: oy + dy };
-          return { ...it, w: Math.max(3, ow + dx), h: Math.max(2, oh + dy) };
-        })
-      );
+      last = els.map((it) => {
+        if (it.id !== el.id) return it;
+        if (kind === "move") return { ...it, x: ox + dx, y: oy + dy };
+        return { ...it, w: Math.max(3, ow + dx), h: Math.max(2, oh + dy) };
+      });
+      setEls(last);
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      if (last) commit(last);
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   }
 
   /* ---------- 元素内容 ---------- */
-  function elContent(el: LayoutEl, data: Record<string, string> | null): React.ReactNode {
+  function elContent(el: LayoutEl, data: Record<string, string> | null, rowsData?: Record<string, string>[], edit?: boolean): React.ReactNode {
     const p = el.props;
     const style: React.CSSProperties = {
       fontSize: (p.fontSize || 14) + "px", fontWeight: p.bold ? 700 : 400, textAlign: p.align || "left",
     };
     switch (el.type) {
       case "text":
-        return (
-          <div className="content editable" style={style} contentEditable suppressContentEditableWarning
-            dangerouslySetInnerHTML={{ __html: esc(renderTpl(p.content || "", data)) }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onBlur={(e) => updateProps(el.id, { content: e.currentTarget.textContent || "" })} />
-        );
+      case "free":
+      case "article":
+      case "attach":
+        if (edit) {
+          return (
+            <div className="content editable" style={style} contentEditable suppressContentEditableWarning
+              dangerouslySetInnerHTML={{ __html: richEditHTML(p.content || "双击编辑文本") }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onBlur={(e) => updateProps(el.id, { content: richToRaw(e.currentTarget) })} />
+          );
+        }
+        return <div className="content" style={style}>{renderTpl(p.content || "", data, rowsData)}</div>;
       case "line":
         return <div className="content el-line" />;
       case "image":
@@ -378,24 +476,27 @@ export default function App() {
           <div className="content el-sign"><div className="sign-zone">签名区</div></div>
         );
       case "table": {
-        const rows = p.rows || 3, cols = p.cols || 3;
+        const nRows = p.rows || 3, cols = p.cols || 3;
         return (
           <div className="content el-table" style={style}>
             <table>
-              {Array.from({ length: rows }, (_, r) => (
+              {Array.from({ length: nRows }, (_, r) => (
                 <tr key={r}>
-                  {Array.from({ length: cols }, (_, c) => (
-                    <td key={c} contentEditable suppressContentEditableWarning
-                      style={{ textAlign: p.align || "left" }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onBlur={(e) => {
-                        const cells = { ...(p.cells || {}) };
-                        cells[r] = { ...(cells[r] || {}), [c]: e.currentTarget.textContent || "" };
-                        updateProps(el.id, { cells });
-                      }}>
-                      {renderTpl(p.cells?.[r]?.[c] || "", data)}
-                    </td>
-                  ))}
+                  {Array.from({ length: cols }, (_, c) => {
+                    const raw = p.cells?.[r]?.[c] || "";
+                    return edit ? (
+                      <td key={c} style={{ textAlign: p.align || "left" }} contentEditable suppressContentEditableWarning
+                        dangerouslySetInnerHTML={{ __html: richEditHTML(raw) }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onBlur={(e) => {
+                          const cells = { ...(p.cells || {}) };
+                          cells[r] = { ...(cells[r] || {}), [c]: richToRaw(e.currentTarget) };
+                          updateProps(el.id, { cells });
+                        }} />
+                    ) : (
+                      <td key={c} style={{ textAlign: p.align || "left" }}>{renderTpl(raw, data, rowsData)}</td>
+                    );
+                  })}
                 </tr>
               ))}
             </table>
@@ -472,7 +573,7 @@ export default function App() {
       const t = e.target as HTMLElement;
       if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
       if (e.key === "Delete" && selectedId && view === "edit") {
-        setEls(els.filter((it) => it.id !== selectedId));
+        mutateEls((list) => list.filter((it) => it.id !== selectedId));
         setSelectedId(null);
       }
     }
@@ -505,22 +606,23 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
         {view === "edit" ? (
           <>
             <div className="side-scroll">
-              <div className="sec-title">元素库 · 拖到纸张上</div>
-              <div className="palette">
-                {PALETTE.map((it) => (
-                  <div key={it.type} className="pal-item" draggable onDragStart={() => (dragType.current = it.type)}>
-                    {it.label}
+              <div className="group-title" style={{ marginTop: 4 }}>组件</div>
+              <div className="tip-box">💡 拖动到右侧页面开始排版</div>
+              <div className="comp-list">
+                {COMPONENTS.map((it) => (
+                  <div key={it.type} className="comp-item" draggable onDragStart={() => (dragType.current = it.type)}>
+                    <span className="ic">{it.icon}</span>{it.label}
                   </div>
                 ))}
               </div>
-              <div className="sec-title">字段（插入到选中文本）</div>
+              <div className="sec-title">字段（点击插入到选中文本）</div>
               <div className="chips">
                 {fieldNames.map((f) => (
                   <button key={f} className="chip"
                     onClick={() => {
-                      if (selected && selected.type === "text") {
+                      if (selected && TEXT_LIKE.includes(selected.type)) {
                         updateProps(selected.id, { content: (selected.props.content || "") + "{{" + f + "}}" });
-                      } else alert("请先选中一个「文本」元素。");
+                      } else alert("请先选中一个文本类元素（文本/文章区块/附件等）。");
                     }}>
                     {f}
                   </button>
@@ -541,7 +643,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                     <div><label>高(mm)</label>
                       <input type="number" value={selected.h.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, h: Math.max(2, +e.target.value || 2) } : it))} /></div>
                   </div>
-                  {selected.type === "text" && (
+                  {TEXT_LIKE.includes(selected.type) && (
                     <>
                       <div className="props" style={{ marginTop: 6 }}>
                         <textarea value={selected.props.content || ""} onChange={(e) => updateProps(selected.id, { content: e.target.value })} />
@@ -558,6 +660,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                         <input type="checkbox" checked={!!selected.props.bold} onChange={(e) => updateProps(selected.id, { bold: e.target.checked })} />
                         <span>加粗</span>
                       </div>
+                      <div className="empty-tip" style={{ marginTop: 4 }}>文本中输入 {"{{字段}}"} 引用数据，{"{{SUM(金额)}}"} 求和</div>
                     </>
                   )}
                   {selected.type === "image" && (
@@ -604,6 +707,10 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   <span>{f}</span>
                 </label>
               ))}
+            </div>
+            <div className="side-foot">
+              <span style={{ fontSize: 12, color: "var(--sub)" }}>快捷指南 ⓘ</span>
+              <button className="link-btn" onClick={showGuide}>如何创建新模板</button>
             </div>
           </>
         ) : (
@@ -662,6 +769,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                 };
                 setTemplates([...templates, t]);
                 setCurrentTpl(t.id); setSelectedId(null); setBatch(false);
+                histRef.current = { stack: [JSON.stringify(t.elements)], idx: 0 };
                 setView("edit");
               }}>＋ 创建模板</button>
             </div>
@@ -675,12 +783,13 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
         <div className="topbar">
           {view === "edit" ? (
             <>
-              <button className="tb-btn" onClick={() => { setView("preview"); setSelectedId(null); }}>← 退出编辑</button>
-              <span className="sep" />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>✏️ 编辑排版：{cur.name}</span>
+              <button className="tb-btn" onClick={() => { setView("preview"); setSelectedId(null); }}>✕ 退出</button>
+              <input className="name-input" value={cur.name}
+                onChange={(e) => patchTpl(cur.id, (t) => ({ ...t, name: e.target.value }))} />
               <span className="grow" />
-              <span className="save-hint">*改动将自动保存</span>
-              <button className="tb-btn primary" onClick={() => window.print()}>🖨️ 打印</button>
+              <button className="tb-btn" onClick={clearAll}>🗑 清空</button>
+              <button className="tb-btn" title="撤销" disabled={histRef.current.idx <= 0} onClick={undo}>↶</button>
+              <button className="tb-btn" title="重做" disabled={histRef.current.idx >= histRef.current.stack.length - 1} onClick={redo}>↷</button>
             </>
           ) : (
             <>
@@ -731,7 +840,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
               )}
               <span className="grow" />
               <button className="tb-btn" onClick={exportHtml}>⬇ 导出</button>
-              <button className="tb-btn" onClick={() => { setView("edit"); setSelectedId(null); }}>✏️ 编辑</button>
+              <button className="tb-btn" onClick={() => { resetHist(); setView("edit"); setSelectedId(null); }}>✏️ 编辑</button>
               <button className="tb-btn primary" onClick={() => window.print()}>🖨 打印</button>
             </>
           )}
@@ -773,7 +882,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                           </table>
                         </div>
                       ) : (
-                        elContent(el, pg.data || null)
+                        elContent(el, pg.data || null, pg.rows.map((r) => r.data), false)
                       )}
                     </div>
                   ))}
@@ -781,7 +890,39 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
               ))}
             </div>
           ) : (
-            <div
+            <>
+              <div className="canvas-top">
+                <span>改动将自动保存</span>
+                <span className="grow" />
+                <span className="pop-wrap">
+                  <button className="more-btn" onClick={() => setMorePop(!morePop)}>⋯ 更多</button>
+                  {morePop && (
+                    <span className="popover show right" onClick={(e) => e.stopPropagation()}>
+                      <label>纸张</label>
+                      <select value={paper} onChange={(e) => setPaper(e.target.value)}>
+                        <option value="A4">A4</option><option value="A5">A5</option><option value="letter">Letter</option>
+                      </select>
+                      <div className="row2">
+                        <div style={{ flex: 1 }}><label>方向</label>
+                          <select value={landscape ? "l" : "p"} onChange={(e) => setLandscape(e.target.value === "l")}>
+                            <option value="p">纵向</option><option value="l">横向</option>
+                          </select></div>
+                        <div style={{ flex: 1 }}><label>边距mm</label>
+                          <input type="number" min={5} max={40} value={margin} onChange={(e) => setMargin(+e.target.value || 15)} /></div>
+                      </div>
+                      {cur.kind === "view" && (
+                        <>
+                          <label>自动表格每页行数</label>
+                          <input type="number" min={1} max={30} value={perPage} onChange={(e) => setPerPage(+e.target.value || 8)} />
+                        </>
+                      )}
+                      <button className="pop-item" style={{ marginTop: 8 }} onClick={exportHtml}>⬇ 导出 HTML</button>
+                      <button className="pop-item" onClick={showGuide}>📖 使用指南</button>
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div
               ref={editorRef}
               className="paper"
               style={{ width: paperW + "mm", height: paperH + "mm", padding: margin + "mm" }}
@@ -795,11 +936,12 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   className={"el el-" + el.type + (el.id === selectedId ? " selected" : "")}
                   style={{ left: el.x + "mm", top: el.y + "mm", width: el.w + "mm", height: el.h + "mm" }}
                   onMouseDown={(e) => startDrag(e, el, "move")}>
-                  {elContent(el, cur.kind === "record" ? records[currentRec]?.data || {} : null)}
+                  {elContent(el, cur.kind === "record" ? records[currentRec]?.data || {} : null, undefined, true)}
                   <div className="resize-handle" onMouseDown={(e) => startDrag(e, el, "resize")} />
                 </div>
               ))}
-            </div>
+              </div>
+            </>
           )}
         </div>
       </div>
