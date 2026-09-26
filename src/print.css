@@ -1,113 +1,196 @@
-/* ===== 打印排版助手样式（拖拽排版版）===== */
+/* ============================================================
+   打印排版助手 v0.5 —— 官方式布局
+   左侧模板面板 + 顶部操作栏 + 预览/编辑双视图
+   ============================================================ */
+
+:root {
+  --ink: #1f2329; --sub: #646a73; --line: #e5e6eb; --blue: #3370ff;
+  --blue-bg: #f0f4ff; --card: #f7f8fa; --danger: #d83931; --green: #0f8a4d;
+}
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 .app {
   display: flex;
-  flex-direction: column;
   height: 100vh;
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 14px;
-  color: #1f2329;
+  color: var(--ink);
   background: #eef0f3;
 }
 
-.err { padding: 24px; color: #d83931; }
+.err { padding: 24px; color: var(--danger); }
 
-/* ---------- 顶部工具栏 ---------- */
-.toolbar {
-  height: 48px;
-  background: #fff;
-  border-bottom: 1px solid #e5e6eb;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  flex-shrink: 0;
+/* ---------- 整体布局 ---------- */
+.side {
+  width: 250px; flex-shrink: 0; background: #fff;
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
 }
-.toolbar h1 { font-size: 15px; }
-.toolbar .hint { font-size: 12px; color: #646a73; margin-left: auto; }
-.toolbar select,
-.toolbar input {
-  padding: 4px 8px;
-  border: 1px solid #e5e6eb;
-  border-radius: 6px;
-  font-size: 13px;
-  background: #fff;
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.content { flex: 1; overflow: auto; padding: 24px; background: #e2e5ea; }
+
+/* ---------- 左侧：模板面板（预览态）---------- */
+.side-search { padding: 12px 12px 6px; }
+.side-search input {
+  width: 100%; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 6px; font-size: 13px;
 }
-.tabs { display: flex; background: #f7f8fa; border-radius: 8px; padding: 3px; }
-.tabs button {
-  border: none; background: none; padding: 5px 16px;
-  border-radius: 6px; font-size: 13px; cursor: pointer; color: #646a73;
+.side-scroll { flex: 1; overflow-y: auto; padding: 4px 12px; }
+.group-title { font-size: 12px; color: var(--sub); margin: 12px 0 6px; font-weight: 600; }
+.tpl-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 9px; border-radius: 7px; font-size: 13px;
+  cursor: pointer; margin-bottom: 2px;
 }
-.tabs button.on { background: #fff; color: #1f2329; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.tpl-item:hover { background: var(--card); }
+.tpl-item.on { background: var(--blue-bg); color: var(--blue); font-weight: 600; }
+.tpl-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpl-item .del {
+  font-size: 11px; color: var(--sub);
+  border: none; background: none; cursor: pointer; display: none;
+}
+.tpl-item:hover .del { display: block; }
+.tpl-item .del:hover { color: var(--danger); }
+.side-foot { padding: 12px; border-top: 1px solid var(--line); }
+.btn-create {
+  width: 100%; background: var(--blue); color: #fff; border: none;
+  padding: 9px; border-radius: 8px; font-size: 13.5px;
+  cursor: pointer; font-weight: 600;
+}
+.btn-create:hover { background: #2860e1; }
+.side-empty { font-size: 12px; color: #a0a6b0; padding: 4px 9px 8px; }
+
+/* ---------- 左侧：元素库 / 属性（编辑态）---------- */
+.sec-title { font-size: 12px; color: var(--sub); margin: 12px 0 6px; font-weight: 600; }
+.palette { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.pal-item {
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 4px;
+  text-align: center; font-size: 12.5px; cursor: grab;
+  background: #fff; user-select: none;
+}
+.pal-item:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip {
+  font-size: 11px; background: var(--blue-bg); color: var(--blue);
+  border: none; padding: 3px 8px; border-radius: 99px; cursor: pointer;
+}
+.chip:hover { background: #dbe6ff; }
+.prop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.prop-grid label { font-size: 10.5px; color: var(--sub); display: block; }
+.prop-grid input, .prop-grid select {
+  width: 100%; padding: 3px 6px;
+  border: 1px solid var(--line); border-radius: 5px; font-size: 12px;
+}
+.props textarea {
+  width: 100%; height: 56px; padding: 5px;
+  border: 1px solid var(--line); border-radius: 5px;
+  font-size: 12px; font-family: inherit; resize: vertical;
+}
+.btn-sm {
+  border: 1px solid var(--line); background: #fff; border-radius: 6px;
+  padding: 5px; font-size: 12px; cursor: pointer; width: 100%; margin-top: 6px;
+}
+.btn-sm:hover { border-color: var(--blue); color: var(--blue); }
+.btn-del {
+  width: 100%; margin-top: 8px; background: #fff1f0; color: var(--danger);
+  border: 1px solid #ffccc7; padding: 6px; border-radius: 6px;
+  cursor: pointer; font-size: 12px;
+}
+.btn-del:hover { background: #ffccc7; }
+.empty-tip {
+  font-size: 12px; color: var(--sub); padding: 8px;
+  background: var(--card); border-radius: 6px; line-height: 1.6;
+}
+.fld-check { display: flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 0; }
+.icon-btn {
+  border: 1px solid var(--line); background: #fff; border-radius: 6px;
+  padding: 5px 9px; font-size: 12.5px; cursor: pointer;
+}
+.icon-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ---------- 顶部操作栏 ---------- */
+.topbar {
+  height: 46px; background: #fff; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 14px; flex-shrink: 0;
+}
+.topbar .sep { border-left: 1px solid var(--line); height: 20px; margin: 0 4px; }
+.topbar select {
+  padding: 4px 8px; border: 1px solid var(--line);
+  border-radius: 6px; font-size: 13px; max-width: 170px;
+}
+.topbar .grow { flex: 1; }
+.paper-chip {
+  font-size: 12.5px; color: var(--ink); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 9px; cursor: pointer;
+  background: #fff; white-space: nowrap;
+}
+.paper-chip:hover { border-color: var(--blue); color: var(--blue); }
+.rec-chip { font-size: 12.5px; color: var(--sub); white-space: nowrap; }
+.rec-chip b { color: var(--ink); font-weight: 600; }
+.link-btn {
+  border: none; background: none; color: var(--blue);
+  font-size: 12.5px; cursor: pointer; padding: 4px 8px; white-space: nowrap;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn.batch-on {
+  color: #fff; background: var(--green);
+  border-radius: 6px; text-decoration: none;
+}
+.tb-btn {
+  border: 1px solid var(--line); background: #fff; border-radius: 7px;
+  padding: 5px 13px; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.tb-btn:hover { border-color: var(--blue); color: var(--blue); }
+.tb-btn.primary {
+  background: var(--blue); border-color: var(--blue);
+  color: #fff; font-weight: 600;
+}
+.tb-btn.primary:hover { background: #2860e1; color: #fff; }
+.save-hint { font-size: 11.5px; color: #a0a6b0; white-space: nowrap; }
 .btn-print {
-  background: #3370ff; color: #fff; border: none;
+  background: var(--blue); color: #fff; border: none;
   padding: 7px 18px; border-radius: 8px; font-size: 13px;
   cursor: pointer; font-weight: 600;
 }
 .btn-print:hover { background: #2860e1; }
 
-/* ---------- 主区域 ---------- */
-.layout { display: flex; flex: 1; min-height: 0; }
-.sidebar {
-  width: 270px; flex-shrink: 0; background: #fff;
-  border-right: 1px solid #e5e6eb; overflow-y: auto; padding: 12px;
+/* ---------- 纸张设置弹出 ---------- */
+.pop-wrap { position: relative; }
+.popover {
+  position: absolute; top: 36px; left: 0;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .14);
+  padding: 12px; width: 230px; z-index: 50; display: none;
 }
-.stage { flex: 1; overflow: auto; padding: 24px; background: #e2e5ea; }
-
-.sec-title { font-size: 12px; color: #646a73; margin: 12px 0 6px; font-weight: 600; }
-.sec-title:first-child { margin-top: 0; }
-.palette { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.pal-item {
-  border: 1px solid #e5e6eb; border-radius: 8px; padding: 10px 6px;
-  text-align: center; font-size: 13px; cursor: grab; background: #fff; user-select: none;
+.popover.show { display: block; }
+.popover label { font-size: 11px; color: var(--sub); display: block; margin: 7px 0 2px; }
+.popover select, .popover input {
+  width: 100%; padding: 5px 8px;
+  border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px;
 }
-.pal-item:hover { border-color: #3370ff; color: #3370ff; background: #f0f4ff; }
-.chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip {
-  font-size: 11.5px; background: #f0f4ff; color: #3370ff; border: none;
-  padding: 3px 9px; border-radius: 99px; cursor: pointer;
-}
-.chip:hover { background: #dbe6ff; }
-
-.prop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.prop-grid label { font-size: 11px; color: #646a73; display: block; }
-.prop-grid input, .prop-grid select {
-  width: 100%; padding: 4px 6px; border: 1px solid #e5e6eb;
-  border-radius: 5px; font-size: 12px;
-}
-.props textarea {
-  width: 100%; height: 64px; padding: 6px; border: 1px solid #e5e6eb;
-  border-radius: 5px; font-size: 12px; font-family: inherit; resize: vertical;
-}
-.btn-del {
-  width: 100%; margin-top: 8px; background: #fff1f0; color: #d83931;
-  border: 1px solid #ffccc7; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px;
-}
-.btn-del:hover { background: #ffccc7; }
-.empty-tip {
-  font-size: 12px; color: #646a73; padding: 8px;
-  background: #f7f8fa; border-radius: 6px; line-height: 1.6;
-}
-.fld-check { display: flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 0; }
+.popover .row2 { display: flex; gap: 6px; }
 
 /* ---------- 纸张与画布元素 ---------- */
 .paper {
-  background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.15);
+  background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
   position: relative; margin: 0 auto 24px; overflow: hidden;
 }
-.paper.dragover { outline: 2px dashed #3370ff; outline-offset: -8px; }
+.paper.dragover { outline: 2px dashed var(--blue); outline-offset: -8px; }
 .paper-label { position: absolute; top: 5px; right: 10px; font-size: 11px; color: #c0c4cc; z-index: 1; }
-
 .el { position: absolute; cursor: move; user-select: none; }
-.el.selected { outline: 2px solid #3370ff; outline-offset: 1px; }
-.el .content { width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+.el.selected { outline: 2px solid var(--blue); outline-offset: 1px; }
+/* 注意：元素内层复用了 .content 类名，此处显式清掉主内容区的 padding/背景，避免泄漏进元素 */
+.el .content {
+  width: 100%; height: 100%; overflow: hidden; pointer-events: none;
+  padding: 0; flex: none; background: transparent;
+}
 .el .content.editable { pointer-events: auto; }
-.el .content[contenteditable]:focus { outline: 1px dashed #3370ff; }
+.el .content[contenteditable]:focus { outline: 1px dashed var(--blue); }
 .resize-handle {
   position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
-  background: #3370ff; border: 2px solid #fff; border-radius: 50%;
+  background: var(--blue); border: 2px solid #fff; border-radius: 50%;
   cursor: nwse-resize; display: none; z-index: 5;
 }
 .el.selected .resize-handle { display: block; }
@@ -119,45 +202,47 @@
 .el-autotable td, .el-autotable th { border: 1px solid #444; padding: 3px 5px; font-size: 12px; text-align: left; }
 .el-autotable th { background: #f2f2f2; }
 .el-img img { width: 100%; height: 100%; object-fit: contain; }
-.el-qr, .el-bar { background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+/* 类型类名挂在内层 content div 上，用 .el 后代选择器保证优先级并恢复白底/居中 */
+.el-qr, .el-bar,
+.el .el-qr, .el .el-bar {
+  background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
 .qr-box img { width: 100%; height: 100%; }
 .lib-fallback { font-size: 10.5px; color: #999; text-align: center; padding: 4px; }
-.el-sign .content { display: flex; align-items: center; justify-content: center; }
+.el .el-sign { display: flex; align-items: center; justify-content: center; }
 .sign-zone {
   width: 100%; height: 100%; border: 1.5px dashed #999; border-radius: 4px;
-  display: flex; align-items: center; justify-content: center; color: #999; font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+  color: #999; font-size: 11px;
 }
 .sign-zone img { width: 100%; height: 100%; object-fit: contain; }
-.icon-btn {
-  border: 1px solid #e5e6eb; background: #fff; border-radius: 6px;
-  padding: 5px 9px; font-size: 12.5px; cursor: pointer;
-}
-.icon-btn:hover { border-color: #3370ff; color: #3370ff; }
+
+/* ---------- 签名弹窗 ---------- */
 .modal-mask {
-  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .45);
   display: flex; align-items: center; justify-content: center; z-index: 99;
 }
 .modal { background: #fff; border-radius: 12px; padding: 20px; width: 660px; max-width: 92vw; }
 .modal h3 { font-size: 15px; margin-bottom: 10px; }
 #signCanvas {
-  border: 1.5px dashed #3370ff; border-radius: 8px; background: #fff;
+  border: 1.5px dashed var(--blue); border-radius: 8px; background: #fff;
   cursor: crosshair; width: 100%; touch-action: none;
 }
 .modal-row { display: flex; gap: 10px; margin-top: 12px; justify-content: flex-end; }
-.btn-sm {
-  border: 1px solid #e5e6eb; background: #fff; border-radius: 6px;
-  padding: 5px; font-size: 12px; cursor: pointer; width: 100%; margin-top: 6px;
-}
-.btn-sm:hover { border-color: #3370ff; color: #3370ff; }
 
-/* ---------- 打印 CSS ---------- */
-#printArea { display: none; }
-body.printing #printArea { display: block; }
+/* ---------- 打印 ----------
+   新版直接 window.print()：隐藏侧栏/顶栏/数据表切换条，
+   仅让 .content 里的纸张可见并平铺到页面左上角 */
 @media print {
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+  .app { display: block; height: auto; }
+  .side, .topbar, .main > div:not(.content) { display: none !important; }
   body * { visibility: hidden; }
-  #printArea, #printArea * { visibility: visible; }
-  #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
-  body { overflow: visible; background: #fff; }
+  .content, .content * { visibility: visible; }
+  .content {
+    position: absolute; left: 0; top: 0; width: 100%;
+    padding: 0; background: #fff; overflow: visible;
+  }
   .paper { box-shadow: none; margin: 0; page-break-after: always; }
   .paper:last-child { page-break-after: auto; }
   .paper-label { display: none; }
