@@ -155,6 +155,64 @@
   .fm-txt b{font-size:13.5px; font-weight:500;}
   .fm-txt i{font-style:normal; font-size:11px; color:#a0a6b0;}
 
+  /* ===== v1.0 编辑态侧栏：图标栏 + 可切换面板 ===== */
+  .side-body{flex:1; display:flex; min-height:0;}
+  .icon-rail{width:46px; border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:4px; flex-shrink:0;}
+  .rail-btn{width:34px; height:34px; border:none; background:none; border-radius:8px; cursor:pointer; color:#646a73; display:flex; align-items:center; justify-content:center; padding:0;}
+  .rail-btn:hover{background:var(--card);}
+  .rail-btn.on{color:var(--blue); background:var(--blue-bg);}
+  .rail-btn svg{width:19px; height:19px; display:block;}
+  .panel-area{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .panel-scroll{flex:1; overflow-y:auto; padding:12px;}
+  .panel-title{font-size:14px; font-weight:600; margin:2px 0 10px;}
+  .comp-card{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:8px; padding:9px 12px; font-size:13px; cursor:grab; user-select:none; margin-bottom:7px; background:#fff;}
+  .comp-card:hover{border-color:var(--blue); color:var(--blue); background:var(--blue-bg);}
+  .comp-card .ic{font-size:15px; width:20px; text-align:center;}
+  .ds-search{width:100%; padding:6px 10px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; margin-bottom:8px;}
+  .ds-tabs{display:flex; gap:14px; border-bottom:1px solid var(--line); margin-bottom:9px;}
+  .ds-tab{border:none; background:none; font-size:12.5px; padding:5px 2px; cursor:pointer; color:var(--sub); border-bottom:2px solid transparent;}
+  .ds-tab.on{color:var(--blue); border-bottom-color:var(--blue); font-weight:600;}
+  .ds-item{display:flex; align-items:center; gap:8px; border:1px solid #c9dcff; background:#f5f8ff; border-radius:8px; padding:8px 10px; font-size:12.5px; margin-bottom:6px; cursor:pointer; color:var(--ink);}
+  .ds-item:hover{border-color:var(--blue);}
+  .ds-item .ic{color:var(--blue); width:16px; text-align:center; font-size:12px; flex-shrink:0;}
+  .ds-item .nm{overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+  .ds-item .cp{margin-left:auto; border:none; background:none; color:var(--blue); cursor:pointer; font-size:12px; padding:2px 5px; flex-shrink:0;}
+  .ds-item .cp:hover{background:#e1eaff; border-radius:4px;}
+  .loop-wrap{border:1px solid #ffd591; background:#fffaf0; border-radius:8px; padding:8px 10px; margin-bottom:6px;}
+  .loop-head{display:flex; align-items:center; gap:8px; font-size:12.5px; cursor:pointer;}
+  .loop-head .ic{color:#d48806;}
+  .loop-fold{margin-left:auto; font-size:11px; color:#d48806; border:1px solid #ffd591; background:#fff; border-radius:4px; padding:1px 6px; flex-shrink:0;}
+  .loop-sub{margin:6px 0 0 22px;}
+  .loop-sub .ds-item{background:#fff; margin-bottom:5px;}
+  .ps-sec{font-size:12.5px; font-weight:600; margin:13px 0 7px;}
+  .ps-grid{display:grid; grid-template-columns:1fr 1fr; gap:7px;}
+  .ps-grid label{font-size:10.5px; color:var(--sub); display:block; margin-bottom:2px;}
+  .ps-grid input,.ps-grid select{width:100%; padding:5px 7px; border:1px solid var(--line); border-radius:6px; font-size:12px; background:#fff; box-sizing:border-box;}
+  .ps-row{display:flex; align-items:center; justify-content:space-between; font-size:12.5px; padding:7px 0; gap:8px;}
+  .ps-row .hint{color:#a0a6b0; font-size:11px;}
+  .sw{position:relative; width:34px; height:19px; flex-shrink:0; display:inline-block;}
+  .sw input{opacity:0; width:0; height:0;}
+  .sw i{position:absolute; inset:0; background:#d8dadf; border-radius:99px; transition:.15s; cursor:pointer;}
+  .sw i:before{content:""; position:absolute; width:15px; height:15px; border-radius:50%; background:#fff; top:2px; left:2px; transition:.15s; box-shadow:0 1px 2px rgba(0,0,0,.2);}
+  .sw input:checked + i{background:var(--blue);}
+  .sw input:checked + i:before{left:17px;}
+  .wm-radio{display:flex; flex-direction:column; gap:6px; font-size:12.5px; margin-bottom:7px;}
+  .insp-page{border:1px dashed #b8c6ff; background:#f7f9ff; border-radius:8px; padding:8px; margin-bottom:4px;}
+  .insp-page-head{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--sub); padding:0 2px 6px;}
+  .insp-grid{display:grid; grid-template-columns:1fr 1fr; gap:5px;}
+  .insp-el{border:1px solid #91bfff; background:#eef4ff; color:#1f5fd0; border-radius:6px; font-size:11.5px; padding:6px 8px; cursor:pointer; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+  .insp-el:hover{background:#e1eaff;}
+  .insp-el.on{background:#d6e6ff; border-color:#3370ff; font-weight:600;}
+  .insp-el.wide{grid-column:1 / -1;}
+  .fold{border-top:1px solid var(--line); margin-top:10px;}
+  .fold summary{font-size:12.5px; font-weight:600; padding:9px 2px; cursor:pointer; color:var(--ink); list-style:none;}
+  .fold summary::-webkit-details-marker{display:none;}
+  .fold summary:before{content:"▸ ";}
+  .fold[open] summary:before{content:"▾ ";}
+  .fold .fold-body{padding:2px 2px 10px;}
+  .wm-layer{position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; display:flex; align-items:center; justify-content:center;}
+  .wm-layer span{transform:rotate(-22deg); font-size:44px; font-weight:700; color:rgba(31,35,41,.07); white-space:nowrap; letter-spacing:6px;}
+
   /* ===== 编辑模式左侧 ===== */
   .ed-sec{padding:0 12px;}
   .sec-title{font-size:12px; color:var(--sub); margin:12px 0 6px; font-weight:600;}
@@ -168,6 +226,7 @@
   .prop-grid input,.prop-grid select{width:100%; padding:3px 6px; border:1px solid var(--line); border-radius:5px; font-size:12px;}
   .props textarea{width:100%; height:56px; padding:5px; border:1px solid var(--line); border-radius:5px; font-size:12px; font-family:inherit; resize:vertical;}
   .btn-sm{border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px; font-size:12px; cursor:pointer; width:100%; margin-top:6px;}
+  .btn-sm.on{border-color:var(--blue); color:var(--blue); background:var(--blue-bg); font-weight:600;}
   .btn-del{width:100%; margin-top:8px; background:#fff1f0; color:var(--danger); border:1px solid #ffccc7; padding:6px; border-radius:6px; cursor:pointer; font-size:12px;}
   .empty-tip{font-size:12px; color:var(--sub); padding:8px; background:var(--card); border-radius:6px; line-height:1.6;}
   .fld-check{display:flex; align-items:center; gap:5px; font-size:12px; padding:2px 0;}
@@ -308,7 +367,12 @@ var state = {
   batch: false,
   selectedId: null,
   autoFields: ["明细序号","商品名称","型号","规格","数量","单价","金额","出货日期"],
-  paper: "A4", landscape: false, margin: 15, perPage: 8
+  paper: "A4", landscape: false, margin: 15, perPage: 8,
+  margins: { t:15, r:15, b:15, l:15 },   /* v1.0 四边边距(mm) */
+  editPanel: "comp",                      /* v1.0 侧栏面板: comp|data|page|setting|inspector */
+  dsTab: "field", dsSearch: "", loopOpen: false,   /* v1.0 数据源面板状态 */
+  pgSet: { rotate:"default", continuous:false, hfShow:false, hfGap:2.82, mirror:false, hideFirst:false },
+  appSet: { fontPt:10, lineHeight:1.5, paraGap:0, wmMode:"text", wmText:"" }
 };
 var nextId = 100;
 
@@ -319,6 +383,8 @@ function selected(){ return els().find(function(e){ return e.id === state.select
 function curRec(){ return RECORDS[state.currentRec] || RECORDS[0]; }
 function recLabel(rec){ return rec["明细序号"] || rec["商品名称"] || "记录"; }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+/* v1.0 四边边距 → CSS padding 字符串（上 右 下 左） */
+function padStr(){ var m = state.margins; return m.t+"mm "+m.r+"mm "+m.b+"mm "+m.l+"mm"; }
 function nextElId(){
   var max = 0;
   state.templates.forEach(function(t){ t.elements.forEach(function(e){ var n=parseInt(e.id.slice(1)); if(n>max) max=n; }); });
@@ -333,7 +399,8 @@ function saveState(){
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       templates: state.templates, currentTpl: state.currentTpl, autoFields: state.autoFields,
-      paper: state.paper, landscape: state.landscape, margin: state.margin, perPage: state.perPage
+      paper: state.paper, landscape: state.landscape, margin: state.margin, perPage: state.perPage,
+      margins: state.margins, pgSet: state.pgSet, appSet: state.appSet
     }));
   }catch(e){}
 }
@@ -351,6 +418,11 @@ function loadState(){
     if(d.landscape) state.landscape = d.landscape;
     if(d.margin) state.margin = d.margin;
     if(d.perPage) state.perPage = d.perPage;
+    /* v1.0 迁移：旧单一 margin → 四边；合并新设置项 */
+    if(d.margins && typeof d.margins.t === "number") state.margins = d.margins;
+    else if(d.margin) state.margins = { t:d.margin, r:d.margin, b:d.margin, l:d.margin };
+    if(d.pgSet) state.pgSet = Object.assign(state.pgSet, d.pgSet);
+    if(d.appSet) state.appSet = Object.assign(state.appSet, d.appSet);
     var max = 0;
     state.templates.forEach(function(t){ t.elements.forEach(function(e){ var n=parseInt(e.id.slice(1)); if(n>max) max=n; }); });
     nextId = max + 1;
@@ -394,12 +466,7 @@ function chipLabel(f){
   var m = f.match(/^SUM\((.+)\)$/);
   return m ? "求和 · " + m[1].trim() : f;
 }
-/* v0.9 判断字段是否与数据表关联（SUM(字段) 剥壳后检查） */
-function fieldExists(f){
-  var m = f.match(/^SUM\((.+)\)$/);
-  var name = (m ? m[1] : f).trim();
-  return FIELDS.indexOf(name) >= 0;
-}
+/* v0.9/v1.0 判断字段是否可取数（明细字段 + 系统字段；SUM 剥壳）——定义见下方 v1.0 面板区 */
 function richEditHTML(raw){
   return esc(raw || "").replace(/\{\{(.*?)\}\}/g, function(_, f){
     var cls = fieldExists(f) ? "fld-chip chip-ok" : "fld-chip chip-bad";
@@ -418,7 +485,8 @@ function renderTplHtml(tpl, data, rows){
       list.forEach(function(r){ var n = parseFloat(r[name]); if(!isNaN(n)) sum += n; });
       return esc(String(Math.round(sum * 100) / 100));
     }
-    var v = data ? data[f.trim()] : undefined;
+    var key = f.trim();
+    var v = data && data[key] !== undefined ? data[key] : SYS_DATA[key];
     return (v === undefined || v === null) ? "" : esc(String(v));
   });
 }
@@ -541,8 +609,8 @@ function buildPages(area){
   pages.forEach(function(pg){
     var paper = document.createElement("div");
     paper.className = "paper";
-    paper.style.width = dim.w+"mm"; paper.style.height = dim.h+"mm"; paper.style.padding = state.margin+"mm";
-    paper.innerHTML = '<span class="paper-label">第 '+pg.no+" 页 / 共 "+total+" 页</span>";
+    paper.style.width = dim.w+"mm"; paper.style.height = dim.h+"mm"; paper.style.padding = padStr();
+    paper.innerHTML = '<span class="paper-label">第 '+pg.no+" 页 / 共 "+total+" 页</span>" + wmHtml();
 
     els().forEach(function(el){
       var div = document.createElement("div");
@@ -575,47 +643,33 @@ function buildPages(area){
 /* =====================================================================
  * 左侧面板渲染
  * ===================================================================== */
+/* v1.0 编辑态侧栏：图标栏 + 可切换面板 */
+var RAIL_ICONS = {
+  comp: '<svg viewBox="0 0 20 20" fill="currentColor"><rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1.5"/><rect x="11" y="2.5" width="6.5" height="6.5" rx="1.5"/><rect x="2.5" y="11" width="6.5" height="6.5" rx="1.5"/><rect x="11" y="11" width="6.5" height="6.5" rx="1.5"/></svg>',
+  data: '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M5 3h3v2H7v10h1v2H5z"/><rect x="9.2" y="3" width="1.8" height="14" rx="0.9"/><path d="M15 3h-3v2h1v10h-1v2h3z"/></svg>',
+  page: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2.5 11c2.5-6 4.5-6 6.5-1.5s4 4.5 6-.5"/><path d="M2.5 17h15"/></svg>',
+  setting: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="3.2"/><path d="M10 2.2v2.6M10 15.2v2.6M2.2 10h2.6M15.2 10h2.6M4.6 4.6l1.9 1.9M13.5 13.5l1.9 1.9M15.4 4.6l-1.9 1.9M6.5 13.5l-1.9 1.9"/></svg>',
+  inspector: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 5.5h11M3 9.5h7M3 13.5h4.5"/><circle cx="13.5" cy="12.5" r="3"/><path d="M15.8 14.8l2 2"/></svg>'
+};
+var RAIL_TITLES = { comp:"组件", data:"数据源", page:"页面设置", setting:"设置", inspector:"检查器" };
+var TYPE_NAMES = { text:"文本", table:"表格", image:"图片", attach:"附件", qrcode:"二维码", barcode:"条形码", line:"水平线", free:"自由拖动元素", article:"文章区块", autotable:"自动表格", sign:"签名" };
+
 function renderSide(){
   var side = $("sidePanel");
   if(state.view === "edit"){
-    var html = '<div class="side-scroll">';
-    html += '<div class="ed-sec"><div class="group-title" style="margin-top:4px">组件</div>';
-    html += '<div class="tip-box">💡 拖动到右侧页面开始排版</div><div class="comp-list">';
-    COMPONENTS.forEach(function(it){
-      html += '<div class="comp-item" draggable="true" data-type="'+it.type+'"><span class="ic">'+it.icon+"</span>"+it.label+"</div>";
+    var html = '<div class="side-body"><div class="icon-rail">';
+    ["comp","data","page","setting","inspector"].forEach(function(k){
+      html += '<button class="rail-btn'+(state.editPanel===k?" on":"")+'" data-panel="'+k+'" title="'+RAIL_TITLES[k]+'">'+RAIL_ICONS[k]+'</button>';
     });
-    html += "</div></div>";
-    html += '<div class="ed-sec"><div class="sec-title">字段（点击插入到选中文本）</div><div class="chips">';
-    FIELDS.forEach(function(f){ html += '<button class="chip" data-field="'+esc(f)+'">{{'+esc(f)+"}}</button>"; });
-    html += "</div></div>";
-    html += '<div class="ed-sec"><div class="sec-title">元素属性</div><div id="propsBox"></div></div>';
-    html += '<div class="ed-sec"><div class="sec-title">自动表格 · 显示字段</div>';
-    FIELDS.forEach(function(f){
-      html += '<label class="fld-check"><input type="checkbox" data-af="'+esc(f)+'"'+(state.autoFields.indexOf(f)>=0?" checked":"")+'><span>'+esc(f)+"</span></label>";
-    });
-    html += "</div></div>";
+    html += '</div><div class="panel-area"><div class="panel-scroll">';
+    html += renderEditPanel();
+    html += '</div></div></div>';
     side.innerHTML = html;
 
-    side.querySelectorAll(".comp-item").forEach(function(item){
-      item.addEventListener("dragstart", function(e){ dragType = item.dataset.type; e.dataTransfer.setData("text/plain", dragType); });
+    side.querySelectorAll(".rail-btn").forEach(function(b){
+      b.addEventListener("click", function(){ state.editPanel = b.dataset.panel; renderSide(); });
     });
-    side.querySelectorAll(".chip").forEach(function(b){
-      b.addEventListener("click", function(){
-        var el = selected();
-        if(el && TEXT_LIKE.indexOf(el.type) >= 0){
-          el.props.content = (el.props.content||"") + "{{" + b.dataset.field + "}}";
-          commit(); renderAll(); saveState();
-        }else alert("请先选中一个文本类元素（文本/文章区块/附件等）。");
-      });
-    });
-    side.querySelectorAll("[data-af]").forEach(function(cb){
-      cb.addEventListener("change", function(){
-        var f = cb.dataset.af;
-        if(cb.checked){ if(state.autoFields.indexOf(f)<0) state.autoFields.push(f); }
-        else state.autoFields = state.autoFields.filter(function(x){ return x!==f; });
-        renderContent(); saveState();
-      });
-    });
+    bindEditPanel(side);
     renderProps();
     return;
   }
@@ -659,6 +713,251 @@ function renderSide(){
     });
   });
 }
+/* ===== v1.0 编辑态面板：渲染 + 事件 ===== */
+var LOOP_FIELDS = ["商品名称","型号","规格","数量","单价","金额"];
+/* 系统字段（演示）：不在数据表明细里，渲染时从 SYS_DATA 取值 */
+var SYS_DATA = { "公司名称":"点火科技公司", "公司地址":"江苏省南京市溧水区", "客服电话":"198-8888-8888", "公司邮箱":"service@example.com" };
+
+function fieldMeta(f){
+  var v = RECORDS[0] ? RECORDS[0][f] : undefined;
+  var s = v === undefined || v === null ? "" : String(v);
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return { ic:"▦", type:"日期" };
+  if(s !== "" && !isNaN(+s)) return { ic:"Σ", type:"数字" };
+  return { ic:"A≡", type:"文本" };
+}
+function fieldExists(f){
+  var m = f.match(/^SUM\((.+)\)$/);
+  var name = (m ? m[1] : f).trim();
+  return FIELDS.indexOf(name) >= 0 || SYS_DATA.hasOwnProperty(name);
+}
+function insertField(f){
+  var el = selected();
+  if(el && TEXT_LIKE.indexOf(el.type) >= 0){
+    el.props.content = (el.props.content||"") + "{{" + f + "}}";
+    commit(); renderAll(); saveState();
+  }else alert("请先选中一个文本类元素（文本/文章区块/附件等）。");
+}
+function wmTextNow(){
+  var s = state.appSet;
+  if(s.wmMode === "text") return s.wmText || "";
+  if(s.wmMode === "field") return s.wmText && curRec()[s.wmText] ? String(curRec()[s.wmText]) : "";
+  return "";
+}
+function wmHtml(){
+  var t = wmTextNow();
+  return t ? '<div class="wm-layer"><span>'+esc(t)+'</span></div>' : "";
+}
+
+function renderEditPanel(){
+  var p = state.editPanel;
+  if(p === "comp") return renderPanelComp();
+  if(p === "data") return renderPanelData();
+  if(p === "page") return renderPanelPage();
+  if(p === "setting") return renderPanelSetting();
+  if(p === "inspector") return renderPanelInspector();
+  return "";
+}
+
+function renderPanelComp(){
+  var html = '<div class="panel-title">组件</div>';
+  html += '<div class="tip-box">拖动到右侧页面开始排版演示 🙂</div>';
+  COMPONENTS.forEach(function(it){
+    html += '<div class="comp-card" draggable="true" data-type="'+it.type+'"><span class="ic">'+it.icon+"</span>"+it.label+"</div>";
+  });
+  return html;
+}
+
+function renderPanelData(){
+  var q = (state.dsSearch||"").trim().toLowerCase();
+  var html = '<div class="panel-title">数据源</div>';
+  html += '<input class="ds-search" id="dsSearch" placeholder="搜索字段" value="'+esc(state.dsSearch||"")+'">';
+  html += '<div class="ds-tabs"><button class="ds-tab'+(state.dsTab!=="sys"?" on":"")+'" data-tab="field">字段</button><button class="ds-tab'+(state.dsTab==="sys"?" on":"")+'" data-tab="sys">系统</button></div>';
+  if(state.dsTab !== "sys"){
+    FIELDS.forEach(function(f){
+      if(q && f.toLowerCase().indexOf(q) < 0) return;
+      var m = fieldMeta(f);
+      html += '<div class="ds-item" data-field="'+esc(f)+'" title="点击插入到选中文本"><span class="ic">'+m.ic+'</span><span class="nm">'+esc(f)+'</span><button class="cp" data-copy="'+esc(f)+'" title="复制变量">⧉</button></div>';
+    });
+    html += '<div class="ps-sec">循环字段</div>';
+    html += '<div class="ps-row" style="padding:0 0 6px"><span style="color:var(--blue);font-size:12px;cursor:pointer">ⓘ 循环变量使用方法</span></div>';
+    html += '<div class="loop-wrap"><div class="loop-head" id="loopHead"><span class="ic">⑃</span><span class="nm">订单明细</span><button class="loop-fold">'+(state.loopOpen?"收起 ∧":"展开 ∨")+'</button></div>';
+    if(state.loopOpen){
+      html += '<div class="loop-sub">';
+      LOOP_FIELDS.forEach(function(f){
+        var m = fieldMeta(f);
+        html += '<div class="ds-item" data-field="'+esc(f)+'"><span class="ic">'+m.ic+'</span><span class="nm">'+esc(f)+'</span><button class="cp" data-copy="'+esc(f)+'">⧉</button></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<div class="ds-item" data-field="明细序号"><span class="ic">#</span><span class="nm">自动序号</span><button class="cp" data-copy="明细序号">⧉</button></div>';
+  }else{
+    Object.keys(SYS_DATA).forEach(function(f){
+      html += '<div class="ds-item" data-field="'+esc(f)+'" title="点击插入到选中文本"><span class="ic">T</span><span class="nm">'+esc(f)+'</span><button class="cp" data-copy="'+esc(f)+'">⧉</button></div>';
+    });
+  }
+  return html;
+}
+
+function renderPanelPage(){
+  var t = curTpl();
+  var dim = paperSizeMM();
+  var g = state.pgSet, m = state.margins;
+  var html = '<div class="panel-title">页面设置</div>';
+  html += '<div class="ps-sec">页面尺寸（mm）</div>';
+  html += '<div class="ps-grid"><div><label>纸张</label><select id="psPaper"><option value="A4">A4</option><option value="A5">A5</option><option value="letter">Letter</option></select></div>';
+  html += '<div><label>页面方向</label><div style="display:flex;gap:5px"><button class="btn-sm'+(!state.landscape?" on":"")+'" id="psPort" style="margin:0">纵向</button><button class="btn-sm'+(state.landscape?" on":"")+'" id="psLand" style="margin:0">横向</button></div></div></div>';
+  html += '<div class="ps-grid" style="margin-top:7px"><div><label>宽</label><input value="'+dim.w+'" readonly></div><div><label>高</label><input value="'+dim.h+'" readonly></div></div>';
+  html += '<div class="ps-sec">页边距 (mm)</div>';
+  html += '<div class="ps-grid"><div><label>上</label><input id="psMt" type="number" value="'+m.t+'" min="0" max="60"></div><div><label>下</label><input id="psMb" type="number" value="'+m.b+'" min="0" max="60"></div>' +
+    '<div><label>左</label><input id="psMl" type="number" value="'+m.l+'" min="0" max="60"></div><div><label>右</label><input id="psMr" type="number" value="'+m.r+'" min="0" max="60"></div></div>';
+  if(t.kind === "view"){
+    html += '<div class="ps-grid" style="margin-top:7px"><div><label>自动表格每页行数</label><input id="psPer" type="number" value="'+state.perPage+'" min="1" max="30"></div><div></div></div>';
+  }
+  html += '<div class="ps-sec">打印选项</div>';
+  html += '<div class="ps-grid"><div><label>打印旋转 ⓘ</label><select id="psRot"><option value="default">默认</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></div>';
+  html += '<div><label>连续页面 ⓘ</label><div style="padding:5px 0"><label class="sw"><input type="checkbox" id="psCont"'+(g.continuous?" checked":"")+'><i></i></label></div></div></div>';
+  html += '<div class="ps-sec">页头页尾配置</div>';
+  html += '<div class="ps-row"><span>显示页头页尾</span><label class="sw"><input type="checkbox" id="psHf"'+(g.hfShow?" checked":"")+'><i></i></label></div>';
+  if(g.hfShow){
+    html += '<div class="ps-row" style="padding-bottom:2px"><span>与正文间距 ⓘ</span></div>';
+    html += '<div class="ps-grid"><div><label>页头 (mm)</label><input id="psHh" type="number" step="0.1" value="'+g.hfGap+'"></div><div><label>页尾 (mm)</label><input id="psHt" type="number" step="0.1" value="'+g.hfGap+'"></div></div>';
+    html += '<div class="ps-row"><span>左右页镜像 ⓘ</span><label class="sw"><input type="checkbox" id="psMirror"'+(g.mirror?" checked":"")+'><i></i></label></div>';
+    html += '<div class="ps-row"><span>首页隐藏 ⓘ</span><label class="sw"><input type="checkbox" id="psHide1"'+(g.hideFirst?" checked":"")+'><i></i></label></div>';
+  }
+  return html;
+}
+
+function renderPanelSetting(){
+  var s = state.appSet;
+  function opts(list, cur){
+    return list.map(function(v){ return '<option value="'+v+'"'+(String(cur)===String(v)?" selected":"")+'>'+v+'</option>'; }).join("");
+  }
+  var html = '<div class="panel-title">设置</div>';
+  html += '<div class="ps-sec">默认字体大小（pt）</div>';
+  html += '<select id="asFont" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;background:#fff">'+opts([8,9,10,11,12,14], s.fontPt)+'</select>';
+  html += '<div class="ps-sec">默认行高</div>';
+  html += '<select id="asLh" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;background:#fff">'+opts([1,1.15,1.5,2], s.lineHeight)+'</select>';
+  html += '<div class="ps-sec">默认段后间距</div>';
+  html += '<select id="asPg" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;background:#fff">'+opts([0,2,4,8], s.paraGap)+'</select>';
+  html += '<div class="ps-sec">全局水印</div>';
+  html += '<div class="wm-radio">' +
+    '<label><input type="radio" name="wmMode" value="text"'+(s.wmMode!=="field"&&s.wmMode!=="image"?" checked":"")+'> 固定文字</label>' +
+    '<label><input type="radio" name="wmMode" value="field"'+(s.wmMode==="field"?" checked":"")+'> 字段值</label>' +
+    '<label><input type="radio" name="wmMode" value="image"'+(s.wmMode==="image"?" checked":"")+'> 图片</label></div>';
+  html += '<textarea id="asWm" placeholder="输入水印内容" style="width:100%;height:64px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box">'+esc(s.wmText||"")+'</textarea>';
+  html += '<div style="font-size:11px;color:#a0a6b0;margin-top:7px;line-height:1.7">支持固定文字、图片，或根据当前记录字段动态显示</div>';
+  return html;
+}
+
+function renderPanelInspector(){
+  var t = curTpl();
+  var compIcons = {};
+  COMPONENTS.forEach(function(c){ compIcons[c.type] = c.icon; });
+  var html = '<div class="panel-title">检查器</div>';
+  html += '<div class="ps-sec" style="margin-top:2px">模板结构</div>';
+  html += '<div class="insp-page"><div class="insp-page-head"><span>页面 1</span><span style="letter-spacing:-1px">&lt;/&gt;</span></div><div class="insp-grid">';
+  els().forEach(function(el){
+    var wide = el.type === "line" || el.type === "table" || el.type === "autotable" || el.w >= 100;
+    html += '<div class="insp-el'+(el.id===state.selectedId?" on":"")+(wide?" wide":"")+'" data-el="'+el.id+'" title="点击选中该元素">'+(compIcons[el.type]||"▫")+" "+(TYPE_NAMES[el.type]||el.type)+'</div>';
+  });
+  if(!els().length) html += '<div class="side-empty">暂无元素，请从「组件」面板拖入</div>';
+  html += '</div></div>';
+  html += '<div class="ps-sec">元素属性</div><div id="propsBox"></div>';
+  html += '<details class="fold"><summary>文档</summary><div class="fold-body">' +
+    '<div class="ps-row"><span>模板名称</span><input id="inspName" value="'+esc(t.name)+'" style="width:150px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px"></div>' +
+    '<div class="ps-row"><span>模板类型</span><span style="color:var(--sub)">'+(t.kind==="record"?"记录模板":"视图模板")+'</span></div></div></details>';
+  html += '<details class="fold"><summary>页面设置</summary><div class="fold-body">' +
+    '<div class="ps-row"><span>纸张</span><span style="color:var(--sub)">'+state.paper+' · '+(state.landscape?"横向":"纵向")+'</span></div>' +
+    '<div class="ps-row"><span>边距</span><span style="color:var(--sub)">上'+state.margins.t+' 下'+state.margins.b+' 左'+state.margins.l+' 右'+state.margins.r+' mm</span></div></div></details>';
+  html += '<details class="fold"><summary>模板设置</summary><div class="fold-body"><div class="sec-title" style="margin-top:0">自动表格 · 显示字段</div>';
+  FIELDS.forEach(function(f){
+    html += '<label class="fld-check"><input type="checkbox" data-af="'+esc(f)+'"'+(state.autoFields.indexOf(f)>=0?" checked":"")+'><span>'+esc(f)+"</span></label>";
+  });
+  html += '</div></details>';
+  return html;
+}
+
+function bindEditPanel(side){
+  /* 组件拖动 */
+  side.querySelectorAll(".comp-card").forEach(function(item){
+    item.addEventListener("dragstart", function(e){ dragType = item.dataset.type; e.dataTransfer.setData("text/plain", dragType); });
+  });
+  /* 数据源面板 */
+  var ds = $("dsSearch");
+  if(ds) ds.addEventListener("input", function(){
+    state.dsSearch = this.value; renderSide();
+    var n = $("dsSearch"); if(n){ n.focus(); try{ n.setSelectionRange(n.value.length, n.value.length); }catch(e){} }
+  });
+  side.querySelectorAll(".ds-tab").forEach(function(b){
+    b.addEventListener("click", function(){ state.dsTab = b.dataset.tab; renderSide(); });
+  });
+  side.querySelectorAll(".ds-item").forEach(function(item){
+    item.addEventListener("click", function(e){
+      if(e.target.classList.contains("cp")) return;
+      insertField(item.dataset.field);
+    });
+  });
+  side.querySelectorAll(".cp").forEach(function(b){
+    b.addEventListener("click", function(e){
+      e.stopPropagation();
+      var txt = "{{" + b.dataset.copy + "}}";
+      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+      b.textContent = "✓";
+      setTimeout(function(){ b.textContent = "⧉"; }, 900);
+    });
+  });
+  var lh = $("loopHead");
+  if(lh) lh.addEventListener("click", function(){ state.loopOpen = !state.loopOpen; renderSide(); });
+  /* 页面设置面板 */
+  var pp = $("psPaper"); if(pp){ pp.value = state.paper; pp.addEventListener("change", function(){ state.paper = this.value; renderAll(); saveState(); }); }
+  var pt = $("psPort"); if(pt) pt.addEventListener("click", function(){ state.landscape = false; renderAll(); saveState(); });
+  var pl = $("psLand"); if(pl) pl.addEventListener("click", function(){ state.landscape = true; renderAll(); saveState(); });
+  [["psMt","t"],["psMb","b"],["psMl","l"],["psMr","r"]].forEach(function(pair){
+    var n = $(pair[0]); if(!n) return;
+    n.addEventListener("input", function(){
+      state.margins[pair[1]] = +this.value || 0;
+      var p = $("editorPaper"); if(p) p.style.padding = padStr();
+    });
+    n.addEventListener("change", function(){ renderAll(); saveState(); });
+  });
+  var pr = $("psPer"); if(pr){ pr.addEventListener("input", function(){ state.perPage = +this.value || 8; renderAll(); saveState(); }); }
+  var prr = $("psRot"); if(prr){ prr.value = state.pgSet.rotate; prr.addEventListener("change", function(){ state.pgSet.rotate = this.value; saveState(); }); }
+  var pc = $("psCont"); if(pc) pc.addEventListener("change", function(){ state.pgSet.continuous = this.checked; saveState(); });
+  var ph = $("psHf"); if(ph) ph.addEventListener("change", function(){ state.pgSet.hfShow = this.checked; renderSide(); saveState(); });
+  var phh = $("psHh"); if(phh) phh.addEventListener("input", function(){ state.pgSet.hfGap = +this.value || 2.82; saveState(); });
+  var pht = $("psHt"); if(pht) pht.addEventListener("input", function(){ state.pgSet.hfGap = +this.value || 2.82; saveState(); });
+  var pmr = $("psMirror"); if(pmr) pmr.addEventListener("change", function(){ state.pgSet.mirror = this.checked; saveState(); });
+  var ph1 = $("psHide1"); if(ph1) ph1.addEventListener("change", function(){ state.pgSet.hideFirst = this.checked; saveState(); });
+  /* 设置面板 */
+  var af = $("asFont"); if(af) af.addEventListener("change", function(){ state.appSet.fontPt = +this.value || 10; saveState(); });
+  var al = $("asLh"); if(al) al.addEventListener("change", function(){ state.appSet.lineHeight = +this.value || 1.5; saveState(); });
+  var ap = $("asPg"); if(ap) ap.addEventListener("change", function(){ state.appSet.paraGap = +this.value || 0; saveState(); });
+  side.querySelectorAll('input[name="wmMode"]').forEach(function(r){
+    r.addEventListener("change", function(){ state.appSet.wmMode = r.value; renderSide(); saveState(); });
+  });
+  var aw = $("asWm"); if(aw) aw.addEventListener("input", function(){
+    state.appSet.wmText = this.value; saveState();
+    document.querySelectorAll(".wm-layer span").forEach(function(n){ n.textContent = aw.value; });
+  });
+  /* 检查器面板 */
+  side.querySelectorAll(".insp-el").forEach(function(n){
+    n.addEventListener("click", function(){
+      state.selectedId = n.dataset.el;
+      renderAll();
+    });
+  });
+  var inm = $("inspName"); if(inm) inm.addEventListener("input", function(){ curTpl().name = this.value; saveState(); renderTopbar(); });
+  side.querySelectorAll("[data-af]").forEach(function(cb){
+    cb.addEventListener("change", function(){
+      var f = cb.dataset.af;
+      if(cb.checked){ if(state.autoFields.indexOf(f)<0) state.autoFields.push(f); }
+      else state.autoFields = state.autoFields.filter(function(x){ return x!==f; });
+      renderContent(); saveState();
+    });
+  });
+}
+
 function tplItemHtml(tp){
   var ic = tp.kind === "record" ? "📄" : "🗃️";
   return '<div class="tpl-item'+(tp.id===state.currentTpl?" on":"")+'" data-id="'+tp.id+'">' +
@@ -739,7 +1038,7 @@ function renderTopbar(){
 
   var pp = $("ppPaper"); if(pp){ pp.value = state.paper; pp.addEventListener("change", function(){ state.paper = this.value; renderAll(); saveState(); }); }
   var po = $("ppOrient"); if(po){ po.value = state.landscape ? "l" : "p"; po.addEventListener("change", function(){ state.landscape = this.value === "l"; renderAll(); saveState(); }); }
-  var pm = $("ppMargin"); if(pm){ pm.addEventListener("input", function(){ state.margin = +this.value || 15; renderAll(); saveState(); }); }
+  var pm = $("ppMargin"); if(pm){ pm.addEventListener("input", function(){ var v = +this.value || 15; state.margins = { t:v, r:v, b:v, l:v }; renderAll(); saveState(); }); }
   var pr = $("ppPer"); if(pr){ pr.addEventListener("input", function(){ state.perPage = +this.value || 8; renderAll(); saveState(); }); }
   var rs = $("recSel"); if(rs){ rs.addEventListener("change", function(){ state.currentRec = +this.value; renderAll(); }); }
 }
@@ -788,7 +1087,7 @@ function clearAll(){
   commit(); renderAll(); saveState();
 }
 function showGuide(){
-  alert("快捷指南：\n\n1. 从左侧「组件」拖元素到纸张排版；\n2. 双击文本直接编辑，输入 {{字段名}} 引用表格字段，输入 {{SUM(金额)}} 对整页求和；\n3. 顶栏支持清空 / 撤销 / 重做；\n4. 右上「⋯ 更多」可修改纸张参数、导出 HTML；\n5. 新建模板：预览页左下角「＋ 创建模板」。");
+  alert("快捷指南：\n\n1. 编辑态左侧图标栏可切换面板：组件 / 数据源 / 页面设置 / 设置 / 检查器；\n2. 从「组件」拖元素到纸张排版；双击文本直接编辑；\n3. 输入 {{字段名}} 引用字段（蓝色=可取数，红色=未找到），{{SUM(金额)}} 对整页求和；点击字段 chip 可更改/删除；\n4. 点击元素出现浮动工具条：对齐 / 编辑 / 位置 / 复制 / 删除；\n5. 「页面设置」改纸张/方向/四边边距；「设置」配默认字号与全局水印；「检查器」看模板结构并选中元素；\n6. 新建模板：预览页左下角「＋ 创建模板」。");
 }
 function enterEdit(){ state.view = "edit"; state.selectedId = null; resetHist(); renderAll(); }
 function exitEdit(){ state.view = "preview"; state.selectedId = null; renderAll(); }
@@ -826,21 +1125,13 @@ function renderContent(){
     '<div class="canvas-top"><span>改动将自动保存</span><span class="grow"></span>' +
     '<span class="pop-wrap"><button class="more-btn" onclick="toggleMorePop(event)">⋯ 更多</button>' +
     '<span class="popover right" id="morePop">' +
-    '<label>纸张</label><select id="epPaper"><option value="A4">A4</option><option value="A5">A5</option><option value="letter">Letter</option></select>' +
-    '<div class="row2"><div style="flex:1"><label>方向</label><select id="epOrient"><option value="p">纵向</option><option value="l">横向</option></select></div>' +
-    '<div style="flex:1"><label>边距mm</label><input id="epMargin" type="number" value="'+state.margin+'" min="5" max="40"></div></div>' +
-    (t0.kind==="view" ? '<label>自动表格每页行数</label><input id="epPer" type="number" value="'+state.perPage+'" min="1" max="30">' : "") +
-    '<button class="pop-item" style="margin-top:8px" onclick="exportHtml()">⬇ 导出 HTML</button>' +
+    '<button class="pop-item" onclick="exportHtml()">⬇ 导出 HTML</button>' +
     '<button class="pop-item" onclick="showGuide()">📖 使用指南</button>' +
     '</span></span></div>' +
-    '<div class="paper" id="editorPaper"></div>';
-  var epP = $("epPaper"); if(epP){ epP.value = state.paper; epP.addEventListener("change", function(){ state.paper = this.value; renderAll(); saveState(); }); }
-  var epO = $("epOrient"); if(epO){ epO.value = state.landscape ? "l" : "p"; epO.addEventListener("change", function(){ state.landscape = this.value === "l"; renderAll(); saveState(); }); }
-  var epM = $("epMargin"); if(epM){ epM.addEventListener("input", function(){ state.margin = +this.value || 15; renderAll(); saveState(); }); }
-  var epR = $("epPer"); if(epR){ epR.addEventListener("input", function(){ state.perPage = +this.value || 8; renderAll(); saveState(); }); }
+    '<div class="paper" id="editorPaper">'+wmHtml()+'</div>';
   var paper = $("editorPaper");
   var dim = paperSizeMM();
-  paper.style.width = dim.w+"mm"; paper.style.height = dim.h+"mm"; paper.style.padding = state.margin+"mm";
+  paper.style.width = dim.w+"mm"; paper.style.height = dim.h+"mm"; paper.style.padding = padStr();
 
   els().forEach(function(el){
     var div = document.createElement("div");
@@ -1030,7 +1321,7 @@ function moveFloatBar(el){
 }
 function innerArea(){
   var s = SIZES[state.paper];
-  return { w: (state.landscape ? s[1] : s[0]) - state.margin*2, h: (state.landscape ? s[0] : s[1]) - state.margin*2 };
+  return { w: (state.landscape ? s[1] : s[0]) - state.margins.l - state.margins.r, h: (state.landscape ? s[0] : s[1]) - state.margins.t - state.margins.b };
 }
 function alignSel(el, dir){
   var a = innerArea();
@@ -1078,8 +1369,9 @@ document.addEventListener("drop", function(e){
   var pad = parseFloat(cs.paddingLeft)/MM;
   var innerW = (rect.width - parseFloat(cs.paddingLeft)*2)/MM;
   var innerH = (rect.height - parseFloat(cs.paddingTop)*2)/MM;
+  var defPx = Math.round((state.appSet.fontPt || 10) * 96 / 72); /* v1.0 pt → px */
   var defaults = {
-    text:{ w:60,h:10,props:{content:"双击编辑文本",fontSize:14,bold:false,align:"left"} },
+    text:{ w:60,h:10,props:{content:"双击编辑文本",fontSize:defPx,bold:false,align:"left"} },
     line:{ w:80,h:2,props:{} },
     table:{ w:80,h:30,props:{rows:3,cols:3,cells:{}} },
     autotable:{ w:180,h:60,props:{} },
@@ -1087,9 +1379,9 @@ document.addEventListener("drop", function(e){
     qrcode:{ w:25,h:25,props:{content:"https://example.com"} },
     barcode:{ w:45,h:14,props:{content:"20260927001"} },
     sign:{ w:60,h:22,props:{} },
-    attach:{ w:50,h:10,props:{content:"📎 附件：{{附件}}",fontSize:12} },
-    free:{ w:60,h:10,props:{content:"自由拖动元素",fontSize:14} },
-    article:{ w:100,h:24,props:{content:"在这里输入文字，输入 {{字段}} 快速插入字段",fontSize:12} }
+    attach:{ w:50,h:10,props:{content:"📎 附件：{{附件}}",fontSize:defPx} },
+    free:{ w:60,h:10,props:{content:"自由拖动元素",fontSize:defPx} },
+    article:{ w:100,h:24,props:{content:"在这里输入文字，输入 {{字段}} 快速插入字段",fontSize:defPx} }
   };
   var d = defaults[dragType];
   var el = { id: nextElId(), type: dragType,

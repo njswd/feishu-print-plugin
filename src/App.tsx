@@ -147,11 +147,35 @@ function chipLabel(f: string): string {
   const m = f.match(/^SUM\((.+)\)$/);
   return m ? "求和 · " + m[1].trim() : f;
 }
-/** v0.9 判断字段是否与数据表关联（SUM(字段) 剥壳后检查） */
+/** v1.0 判断字段是否与数据表关联（SUM(字段) 剥壳后检查；含系统字段） */
+const SYS_DATA: Record<string, string> = {
+  "公司名称": "点火科技公司", "公司地址": "江苏省南京市溧水区",
+  "客服电话": "198-8888-8888", "公司邮箱": "service@example.com",
+};
+const LOOP_FIELDS = ["商品名称", "型号", "规格", "数量", "单价", "金额"];
+const TYPE_NAMES: Record<string, string> = {
+  text: "文本", table: "表格", image: "图片", attach: "附件", qrcode: "二维码", barcode: "条形码",
+  line: "水平线", free: "自由拖动元素", article: "文章区块", autotable: "自动表格", sign: "签名",
+};
+/* v1.0 侧栏图标栏 */
+const RAIL_TITLES: Record<string, string> = { comp: "组件", data: "数据源", page: "页面设置", setting: "设置", inspector: "检查器" };
+const RAIL_ICONS: Record<string, React.ReactNode> = {
+  comp: (<svg viewBox="0 0 20 20" fill="currentColor"><rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1.5" /><rect x="11" y="2.5" width="6.5" height="6.5" rx="1.5" /><rect x="2.5" y="11" width="6.5" height="6.5" rx="1.5" /><rect x="11" y="11" width="6.5" height="6.5" rx="1.5" /></svg>),
+  data: (<svg viewBox="0 0 20 20" fill="currentColor"><path d="M5 3h3v2H7v10h1v2H5z" /><rect x="9.2" y="3" width="1.8" height="14" rx="0.9" /><path d="M15 3h-3v2h1v10h-1v2h3z" /></svg>),
+  page: (<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><path d="M2.5 11c2.5-6 4.5-6 6.5-1.5s4 4.5 6-.5" /><path d="M2.5 17h15" /></svg>),
+  setting: (<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><circle cx="10" cy="10" r="3.2" /><path d="M10 2.2v2.6M10 15.2v2.6M2.2 10h2.6M15.2 10h2.6M4.6 4.6l1.9 1.9M13.5 13.5l1.9 1.9M15.4 4.6l-1.9 1.9M6.5 13.5l-1.9 1.9" /></svg>),
+  inspector: (<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><path d="M3 5.5h11M3 9.5h7M3 13.5h4.5" /><circle cx="13.5" cy="12.5" r="3" /><path d="M15.8 14.8l2 2" /></svg>),
+};
+function fieldMeta(f: string, rec?: Record<string, string>): { ic: string; type: string } {
+  const v = rec?.[f] || "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return { ic: "▦", type: "日期" };
+  if (v !== "" && !isNaN(Number(v))) return { ic: "Σ", type: "数字" };
+  return { ic: "A≡", type: "文本" };
+}
 function fieldExists(f: string, names: string[]): boolean {
   const m = f.match(/^SUM\((.+)\)$/);
   const name = (m ? m[1] : f).trim();
-  return names.includes(name);
+  return names.includes(name) || Object.prototype.hasOwnProperty.call(SYS_DATA, name);
 }
 function chipHtml(f: string, names: string[], withCaret: boolean): string {
   const ok = fieldExists(f, names);
@@ -173,7 +197,8 @@ function renderTplHtml(tpl: string, data: Record<string, string> | null, rowsDat
       list.forEach((r) => { const n = parseFloat(r[name]); if (!isNaN(n)) sum += n; });
       return esc(String(Math.round(sum * 100) / 100));
     }
-    const v = data ? data[f.trim()] : undefined;
+    const key = f.trim();
+    const v = data && data[key] !== undefined ? data[key] : SYS_DATA[key];
     return v === undefined || v === null ? "" : esc(String(v));
   });
 }
@@ -266,8 +291,14 @@ export default function App() {
   const [fieldSearch, setFieldSearch] = useState("");
   const [paper, setPaper] = useState("A4");
   const [landscape, setLandscape] = useState(false);
-  const [margin, setMargin] = useState(15);
+  const [margins, setMargins] = useState({ t: 15, r: 15, b: 15, l: 15 }); // v1.0 四边边距(mm)
   const [perPage, setPerPage] = useState(8);
+  const [editPanel, setEditPanel] = useState<"comp" | "data" | "page" | "setting" | "inspector">("comp"); // v1.0 侧栏面板
+  const [pgSet, setPgSet] = useState({ rotate: "default", continuous: false, hfShow: false, hfGap: 2.82, mirror: false, hideFirst: false });
+  const [appSet, setAppSet] = useState({ fontPt: 10, lineHeight: 1.5, paraGap: 0, wmMode: "text", wmText: "" });
+  const [dsTab, setDsTab] = useState<"field" | "sys">("field");
+  const [dsSearch, setDsSearch] = useState("");
+  const [loopOpen, setLoopOpen] = useState(false);
 
   const editorRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -342,12 +373,18 @@ export default function App() {
     setSelectedId(null);
   }
   function showGuide() {
-    alert("快捷指南：\n\n1. 从左侧「组件」拖元素到纸张排版；\n2. 双击文本直接编辑，输入 {{字段名}} 引用表格字段，输入 {{SUM(金额)}} 对整页求和；\n3. 点击元素出现浮动工具条：对齐 / 编辑 / 位置 / 复制 / 删除；\n4. 顶栏支持清空 / 撤销 / 重做；\n5. 右上「⋯ 更多」可修改纸张参数、导出 HTML；\n6. 新建模板：预览页左下角「＋ 创建模板」。");
+    alert("快捷指南：\n\n1. 编辑态左侧图标栏可切换面板：组件 / 数据源 / 页面设置 / 设置 / 检查器；\n2. 从「组件」拖元素到纸张排版；双击文本直接编辑；\n3. 输入 {{字段名}} 引用字段（蓝色=可取数，红色=未找到），{{SUM(金额)}} 对整页求和；点击字段 chip 可更改/删除；\n4. 点击元素出现浮动工具条：对齐 / 编辑 / 位置 / 复制 / 删除；\n5. 「页面设置」改纸张/方向/四边边距；「设置」配默认字号与全局水印；「检查器」看模板结构并选中元素；\n6. 新建模板：预览页左下角「＋ 创建模板」。");
   }
 
   /* ---------- 浮动工具条（v0.7）---------- */
   useEffect(() => { setAlignPop(false); setPosPop(false); setEditingKey(null); }, [selectedId, view]);
-  const innerArea = () => ({ w: paperW - margin * 2, h: paperH - margin * 2 });
+  const innerArea = () => ({ w: paperW - margins.l - margins.r, h: paperH - margins.t - margins.b });
+  const padStr = margins.t + "mm " + margins.r + "mm " + margins.b + "mm " + margins.l + "mm";
+  /* v1.0 全局水印（固定文字 / 字段值） */
+  const wmText = appSet.wmMode === "text" ? (appSet.wmText || "")
+    : appSet.wmMode === "field" && appSet.wmText && records[currentRec]?.data[appSet.wmText] ? String(records[currentRec].data[appSet.wmText])
+    : "";
+  const wmLayer = wmText ? (<div className="wm-layer"><span>{wmText}</span></div>) : null;
   function alignSel(dir: string) {
     if (!selected) return;
     const a = innerArea();
@@ -386,6 +423,12 @@ export default function App() {
         document.querySelector<HTMLElement>('.el[data-id="' + id + '"] [contenteditable]')?.focus();
       }, 0);
     } else { setPosPop(true); setAlignPop(false); }
+  }
+  /* v1.0 数据源面板：点击字段插入到选中文本 */
+  function insertField(f: string) {
+    if (selected && TEXT_LIKE.includes(selected.type)) {
+      updateProps(selected.id, { content: (selected.props.content || "") + "{{" + f + "}}" });
+    } else alert("请先选中一个文本类元素（文本/文章区块/附件等）。");
   }
 
   /* ---------- 字段 chip 气泡 + 更换字段对话框（v0.8）---------- */
@@ -450,7 +493,10 @@ export default function App() {
         if (d.autoFields) setAutoFields(d.autoFields);
         if (d.paper) setPaper(d.paper);
         if (d.landscape) setLandscape(d.landscape);
-        if (d.margin) setMargin(d.margin);
+        if (d.margins && typeof d.margins.t === "number") setMargins(d.margins);
+        else if (d.margin) setMargins({ t: d.margin, r: d.margin, b: d.margin, l: d.margin });
+        if (d.pgSet) setPgSet((prev) => ({ ...prev, ...d.pgSet }));
+        if (d.appSet) setAppSet((prev) => ({ ...prev, ...d.appSet }));
         if (d.perPage) setPerPage(d.perPage);
       }
     } catch (e) { /* ignore */ }
@@ -458,9 +504,9 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ templates, currentTpl, autoFields, paper, landscape, margin, perPage }));
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ templates, currentTpl, autoFields, paper, landscape, margins, perPage, pgSet, appSet }));
     } catch (e) { /* ignore */ }
-  }, [templates, currentTpl, autoFields, paper, landscape, margin, perPage]);
+  }, [templates, currentTpl, autoFields, paper, landscape, margins, perPage, pgSet, appSet]);
 
   /* ---------- 加载多维表格数据 ---------- */
   async function loadTable(tid: string) {
@@ -532,12 +578,14 @@ export default function App() {
     const innerW = (rect.width - parseFloat(cs.paddingLeft) * 2) / MM;
     const innerH = (rect.height - parseFloat(cs.paddingTop) * 2) / MM;
     const d = DEFAULTS[dragType.current];
+    const defPx = Math.round((appSet.fontPt || 10) * 96 / 72); /* v1.0 默认字号 pt → px */
     const el: LayoutEl = {
       id: nextElId(), type: dragType.current,
       x: Math.max(0, Math.min((e.clientX - rect.left) / MM - pad, innerW - d.w)),
       y: Math.max(0, Math.min((e.clientY - rect.top) / MM - pad, innerH - d.h)),
       w: d.w, h: d.h, props: JSON.parse(JSON.stringify(d.props)),
     };
+    if (TEXT_LIKE.includes(el.type) && el.props.fontSize) el.props.fontSize = defPx;
     mutateEls((list) => [...list, el]);
     setSelectedId(el.id);
     dragType.current = null;
@@ -740,7 +788,7 @@ export default function App() {
     const inner = exportRef.current?.innerHTML || "";
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(cur.name)}</title><style>
 body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
-.paper{width:${paperW}mm;height:${paperH}mm;padding:${margin}mm;box-sizing:border-box}${EXPORT_CSS}
+.paper{width:${paperW}mm;height:${paperH}mm;padding:${margins.t}mm ${margins.r}mm ${margins.b}mm ${margins.l}mm;box-sizing:border-box}${EXPORT_CSS}
 </style></head><body>${inner}</body></html>`;
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const a = document.createElement("a");
@@ -758,108 +806,284 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
       <aside className="side">
         {view === "edit" ? (
           <>
-            <div className="side-scroll">
-              <div className="group-title" style={{ marginTop: 4 }}>组件</div>
-              <div className="tip-box">💡 拖动到右侧页面开始排版</div>
-              <div className="comp-list">
-                {COMPONENTS.map((it) => (
-                  <div key={it.type} className="comp-item" draggable onDragStart={() => (dragType.current = it.type)}>
-                    <span className="ic">{it.icon}</span>{it.label}
-                  </div>
-                ))}
-              </div>
-              <div className="sec-title">字段（点击插入到选中文本）</div>
-              <div className="chips">
-                {fieldNames.map((f) => (
-                  <button key={f} className="chip"
-                    onClick={() => {
-                      if (selected && TEXT_LIKE.includes(selected.type)) {
-                        updateProps(selected.id, { content: (selected.props.content || "") + "{{" + f + "}}" });
-                      } else alert("请先选中一个文本类元素（文本/文章区块/附件等）。");
-                    }}>
-                    {f}
+            <div className="side-body">
+              <div className="icon-rail">
+                {(["comp", "data", "page", "setting", "inspector"] as const).map((k) => (
+                  <button key={k} className={"rail-btn" + (editPanel === k ? " on" : "")} title={RAIL_TITLES[k]} onClick={() => setEditPanel(k)}>
+                    {RAIL_ICONS[k]}
                   </button>
                 ))}
               </div>
-              <div className="sec-title">元素属性</div>
-              {!selected ? (
-                <div className="empty-tip">点击纸张上的元素进行设置；双击文本可直接编辑；选中后按 Delete 删除。</div>
-              ) : (
-                <div>
-                  <div className="prop-grid">
-                    <div><label>X(mm)</label>
-                      <input type="number" value={selected.x.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, x: +e.target.value || 0 } : it))} /></div>
-                    <div><label>Y(mm)</label>
-                      <input type="number" value={selected.y.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, y: +e.target.value || 0 } : it))} /></div>
-                    <div><label>宽(mm)</label>
-                      <input type="number" value={selected.w.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, w: Math.max(3, +e.target.value || 3) } : it))} /></div>
-                    <div><label>高(mm)</label>
-                      <input type="number" value={selected.h.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, h: Math.max(2, +e.target.value || 2) } : it))} /></div>
-                  </div>
-                  {TEXT_LIKE.includes(selected.type) && (
-                    <>
-                      <div className="props" style={{ marginTop: 6 }}>
-                        <textarea value={selected.props.content || ""} onChange={(e) => updateProps(selected.id, { content: e.target.value })} />
+              <div className="panel-area"><div className="panel-scroll">
+                {editPanel === "comp" && (
+                  <>
+                    <div className="panel-title">组件</div>
+                    <div className="tip-box">拖动到右侧页面开始排版演示 🙂</div>
+                    {COMPONENTS.map((it) => (
+                      <div key={it.type} className="comp-card" draggable onDragStart={() => (dragType.current = it.type)}>
+                        <span className="ic">{it.icon}</span>{it.label}
                       </div>
-                      <div className="prop-grid" style={{ marginTop: 6 }}>
-                        <div><label>字号</label>
-                          <input type="number" value={selected.props.fontSize || 14} onChange={(e) => updateProps(selected.id, { fontSize: +e.target.value || 14 })} /></div>
-                        <div><label>对齐</label>
-                          <select value={selected.props.align || "left"} onChange={(e) => updateProps(selected.id, { align: e.target.value as any })}>
-                            <option value="left">左</option><option value="center">中</option><option value="right">右</option>
-                          </select></div>
+                    ))}
+                  </>
+                )}
+                {editPanel === "data" && (
+                  <>
+                    <div className="panel-title">数据源</div>
+                    <input className="ds-search" placeholder="搜索字段" value={dsSearch} onChange={(e) => setDsSearch(e.target.value)} />
+                    <div className="ds-tabs">
+                      <button className={"ds-tab" + (dsTab !== "sys" ? " on" : "")} onClick={() => setDsTab("field")}>字段</button>
+                      <button className={"ds-tab" + (dsTab === "sys" ? " on" : "")} onClick={() => setDsTab("sys")}>系统</button>
+                    </div>
+                    {dsTab !== "sys" ? (
+                      <>
+                        {fieldNames.filter((f) => !dsSearch.trim() || f.toLowerCase().includes(dsSearch.trim().toLowerCase())).map((f) => {
+                          const m = fieldMeta(f, records[0]?.data);
+                          return (
+                            <div key={f} className="ds-item" title="点击插入到选中文本" onClick={() => insertField(f)}>
+                              <span className="ic">{m.ic}</span><span className="nm">{f}</span>
+                              <button className="cp" title="复制变量" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText("{{" + f + "}}"); }}>⧉</button>
+                            </div>
+                          );
+                        })}
+                        <div className="ps-sec">循环字段</div>
+                        <div className="ps-row" style={{ padding: "0 0 6px" }}><span style={{ color: "var(--blue)", fontSize: 12, cursor: "pointer" }}>ⓘ 循环变量使用方法</span></div>
+                        <div className="loop-wrap">
+                          <div className="loop-head" onClick={() => setLoopOpen(!loopOpen)}>
+                            <span className="ic">⑃</span><span className="nm">订单明细</span>
+                            <button className="loop-fold">{loopOpen ? "收起 ∧" : "展开 ∨"}</button>
+                          </div>
+                          {loopOpen && (
+                            <div className="loop-sub">
+                              {LOOP_FIELDS.map((f) => {
+                                const m = fieldMeta(f, records[0]?.data);
+                                return (
+                                  <div key={f} className="ds-item" onClick={() => insertField(f)}>
+                                    <span className="ic">{m.ic}</span><span className="nm">{f}</span>
+                                    <button className="cp" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText("{{" + f + "}}"); }}>⧉</button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="ds-item" onClick={() => insertField("明细序号")}>
+                          <span className="ic">#</span><span className="nm">自动序号</span>
+                          <button className="cp" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText("{{明细序号}}"); }}>⧉</button>
+                        </div>
+                      </>
+                    ) : (
+                      Object.keys(SYS_DATA).map((f) => (
+                        <div key={f} className="ds-item" title="点击插入到选中文本" onClick={() => insertField(f)}>
+                          <span className="ic">T</span><span className="nm">{f}</span>
+                          <button className="cp" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText("{{" + f + "}}"); }}>⧉</button>
+                        </div>
+                      ))
+                    )}
+                  </>
+                )}
+                {editPanel === "page" && (
+                  <>
+                    <div className="panel-title">页面设置</div>
+                    <div className="ps-sec">页面尺寸（mm）</div>
+                    <div className="ps-grid">
+                      <div><label>纸张</label>
+                        <select value={paper} onChange={(e) => setPaper(e.target.value)}>
+                          <option value="A4">A4</option><option value="A5">A5</option><option value="letter">Letter</option>
+                        </select></div>
+                      <div><label>页面方向</label>
+                        <div style={{ display: "flex", gap: 5 }}>
+                          <button className={"btn-sm" + (!landscape ? " on" : "")} style={{ margin: 0 }} onClick={() => setLandscape(false)}>纵向</button>
+                          <button className={"btn-sm" + (landscape ? " on" : "")} style={{ margin: 0 }} onClick={() => setLandscape(true)}>横向</button>
+                        </div></div>
+                    </div>
+                    <div className="ps-grid" style={{ marginTop: 7 }}>
+                      <div><label>宽</label><input value={paperW} readOnly /></div>
+                      <div><label>高</label><input value={paperH} readOnly /></div>
+                    </div>
+                    <div className="ps-sec">页边距 (mm)</div>
+                    <div className="ps-grid">
+                      {([["t", "上"], ["b", "下"], ["l", "左"], ["r", "右"]] as const).map(([k, label]) => (
+                        <div key={k}><label>{label}</label>
+                          <input type="number" min={0} max={60} value={margins[k]}
+                            onChange={(e) => setMargins({ ...margins, [k]: +e.target.value || 0 })} /></div>
+                      ))}
+                    </div>
+                    {cur.kind === "view" && (
+                      <div className="ps-grid" style={{ marginTop: 7 }}>
+                        <div><label>自动表格每页行数</label>
+                          <input type="number" min={1} max={30} value={perPage} onChange={(e) => setPerPage(+e.target.value || 8)} /></div>
+                        <div />
                       </div>
-                      <div className="fld-check" style={{ marginTop: 4 }}>
-                        <input type="checkbox" checked={!!selected.props.bold} onChange={(e) => updateProps(selected.id, { bold: e.target.checked })} />
-                        <span>加粗</span>
+                    )}
+                    <div className="ps-sec">打印选项</div>
+                    <div className="ps-grid">
+                      <div><label>打印旋转 ⓘ</label>
+                        <select value={pgSet.rotate} onChange={(e) => setPgSet({ ...pgSet, rotate: e.target.value })}>
+                          <option value="default">默认</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option>
+                        </select></div>
+                      <div><label>连续页面 ⓘ</label>
+                        <div style={{ padding: "5px 0" }}>
+                          <label className="sw"><input type="checkbox" checked={pgSet.continuous} onChange={(e) => setPgSet({ ...pgSet, continuous: e.target.checked })} /><i></i></label>
+                        </div></div>
+                    </div>
+                    <div className="ps-sec">页头页尾配置</div>
+                    <div className="ps-row"><span>显示页头页尾</span>
+                      <label className="sw"><input type="checkbox" checked={pgSet.hfShow} onChange={(e) => setPgSet({ ...pgSet, hfShow: e.target.checked })} /><i></i></label></div>
+                    {pgSet.hfShow && (
+                      <>
+                        <div className="ps-grid">
+                          <div><label>页头 (mm)</label><input type="number" step={0.1} value={pgSet.hfGap} onChange={(e) => setPgSet({ ...pgSet, hfGap: +e.target.value || 2.82 })} /></div>
+                          <div><label>页尾 (mm)</label><input type="number" step={0.1} value={pgSet.hfGap} onChange={(e) => setPgSet({ ...pgSet, hfGap: +e.target.value || 2.82 })} /></div>
+                        </div>
+                        <div className="ps-row"><span>左右页镜像 ⓘ</span>
+                          <label className="sw"><input type="checkbox" checked={pgSet.mirror} onChange={(e) => setPgSet({ ...pgSet, mirror: e.target.checked })} /><i></i></label></div>
+                        <div className="ps-row"><span>首页隐藏 ⓘ</span>
+                          <label className="sw"><input type="checkbox" checked={pgSet.hideFirst} onChange={(e) => setPgSet({ ...pgSet, hideFirst: e.target.checked })} /><i></i></label></div>
+                      </>
+                    )}
+                  </>
+                )}
+                {editPanel === "setting" && (
+                  <>
+                    <div className="panel-title">设置</div>
+                    <div className="ps-sec">默认字体大小（pt）</div>
+                    <select style={{ width: "100%", padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 12.5, background: "#fff" }}
+                      value={appSet.fontPt} onChange={(e) => setAppSet({ ...appSet, fontPt: +e.target.value || 10 })}>
+                      {[8, 9, 10, 11, 12, 14].map((v) => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <div className="ps-sec">默认行高</div>
+                    <select style={{ width: "100%", padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 12.5, background: "#fff" }}
+                      value={appSet.lineHeight} onChange={(e) => setAppSet({ ...appSet, lineHeight: +e.target.value || 1.5 })}>
+                      {[1, 1.15, 1.5, 2].map((v) => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <div className="ps-sec">默认段后间距</div>
+                    <select style={{ width: "100%", padding: "6px 8px", border: "1px solid var(--line)", borderRadius: 6, fontSize: 12.5, background: "#fff" }}
+                      value={appSet.paraGap} onChange={(e) => setAppSet({ ...appSet, paraGap: +e.target.value || 0 })}>
+                      {[0, 2, 4, 8].map((v) => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <div className="ps-sec">全局水印</div>
+                    <div className="wm-radio">
+                      <label><input type="radio" name="wmMode" checked={appSet.wmMode !== "field" && appSet.wmMode !== "image"} onChange={() => setAppSet({ ...appSet, wmMode: "text" })} /> 固定文字</label>
+                      <label><input type="radio" name="wmMode" checked={appSet.wmMode === "field"} onChange={() => setAppSet({ ...appSet, wmMode: "field" })} /> 字段值</label>
+                      <label><input type="radio" name="wmMode" checked={appSet.wmMode === "image"} onChange={() => setAppSet({ ...appSet, wmMode: "image" })} /> 图片</label>
+                    </div>
+                    <textarea placeholder="输入水印内容" value={appSet.wmText}
+                      style={{ width: "100%", height: 64, padding: "7px 9px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
+                      onChange={(e) => setAppSet({ ...appSet, wmText: e.target.value })} />
+                    <div style={{ fontSize: 11, color: "#a0a6b0", marginTop: 7, lineHeight: 1.7 }}>支持固定文字、图片，或根据当前记录字段动态显示</div>
+                  </>
+                )}
+                {editPanel === "inspector" && (
+                  <>
+                    <div className="panel-title">检查器</div>
+                    <div className="ps-sec" style={{ marginTop: 2 }}>模板结构</div>
+                    <div className="insp-page">
+                      <div className="insp-page-head"><span>页面 1</span><span style={{ letterSpacing: -1 }}>{"</>"}</span></div>
+                      <div className="insp-grid">
+                        {els.map((el) => {
+                          const wide = el.type === "line" || el.type === "table" || el.type === "autotable" || el.w >= 100;
+                          return (
+                            <div key={el.id} className={"insp-el" + (el.id === selectedId ? " on" : "") + (wide ? " wide" : "")}
+                              title="点击选中该元素" onClick={() => setSelectedId(el.id)}>
+                              {COMPONENTS.find((c) => c.type === el.type)?.icon || "▫"} {TYPE_NAMES[el.type] || el.type}
+                            </div>
+                          );
+                        })}
+                        {els.length === 0 && <div className="side-empty">暂无元素，请从「组件」面板拖入</div>}
                       </div>
-                      <div className="empty-tip" style={{ marginTop: 4 }}>文本中输入 {"{{字段}}"} 引用数据，{"{{SUM(金额)}}"} 求和</div>
-                    </>
-                  )}
-                  {selected.type === "image" && (
-                    <div className="props" style={{ marginTop: 6 }}>
-                      <textarea placeholder="图片 URL" value={selected.props.src || ""} onChange={(e) => updateProps(selected.id, { src: e.target.value })} />
                     </div>
-                  )}
-                  {(selected.type === "qrcode" || selected.type === "barcode") && (
-                    <div className="props" style={{ marginTop: 6 }}>
-                      <textarea value={selected.props.content || ""} onChange={(e) => updateProps(selected.id, { content: e.target.value })} />
-                    </div>
-                  )}
-                  {selected.type === "sign" && (
-                    <>
-                      <button className="btn-sm" onClick={() => setSignFor(selected.id)}>
-                        ✍️ {selected.props.src ? "重新手写签名" : "手写签名"}
-                      </button>
-                      {selected.props.src && (
-                        <button className="btn-sm" onClick={() => updateProps(selected.id, { src: undefined })}>清除签名</button>
-                      )}
-                    </>
-                  )}
-                  {selected.type === "table" && (
-                    <div className="prop-grid" style={{ marginTop: 6 }}>
-                      <div><label>行数</label>
-                        <input type="number" min={1} max={20} value={selected.props.rows || 3} onChange={(e) => updateProps(selected.id, { rows: Math.max(1, +e.target.value || 3) })} /></div>
-                      <div><label>列数</label>
-                        <input type="number" min={1} max={10} value={selected.props.cols || 3} onChange={(e) => updateProps(selected.id, { cols: Math.max(1, +e.target.value || 3) })} /></div>
-                    </div>
-                  )}
-                  {selected.type === "autotable" && (
-                    <div className="empty-tip" style={{ marginTop: 6 }}>显示字段在下方「自动表格·显示字段」勾选</div>
-                  )}
-                  <button className="btn-del" onClick={() => { setEls(els.filter((it) => it.id !== selected.id)); setSelectedId(null); }}>
-                    🗑 删除该元素
-                  </button>
-                </div>
-              )}
-              <div className="sec-title">自动表格 · 显示字段</div>
-              {fieldNames.map((f) => (
-                <label key={f} className="fld-check">
-                  <input type="checkbox" checked={autoFields.includes(f)}
-                    onChange={(e) => setAutoFields((prev) => (e.target.checked ? [...prev, f] : prev.filter((x) => x !== f)))} />
-                  <span>{f}</span>
-                </label>
-              ))}
+                    <div className="ps-sec">元素属性</div>
+                    {!selected ? (
+                      <div className="empty-tip">点击纸张上的元素进行设置；双击文本可直接编辑；选中后按 Delete 删除。</div>
+                    ) : (
+                      <div>
+                        <div className="prop-grid">
+                          <div><label>X(mm)</label>
+                            <input type="number" value={selected.x.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, x: +e.target.value || 0 } : it))} /></div>
+                          <div><label>Y(mm)</label>
+                            <input type="number" value={selected.y.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, y: +e.target.value || 0 } : it))} /></div>
+                          <div><label>宽(mm)</label>
+                            <input type="number" value={selected.w.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, w: Math.max(3, +e.target.value || 3) } : it))} /></div>
+                          <div><label>高(mm)</label>
+                            <input type="number" value={selected.h.toFixed(1)} onChange={(e) => setEls(els.map((it) => it.id === selected.id ? { ...it, h: Math.max(2, +e.target.value || 2) } : it))} /></div>
+                        </div>
+                        {TEXT_LIKE.includes(selected.type) && (
+                          <>
+                            <div className="props" style={{ marginTop: 6 }}>
+                              <textarea value={selected.props.content || ""} onChange={(e) => updateProps(selected.id, { content: e.target.value })} />
+                            </div>
+                            <div className="prop-grid" style={{ marginTop: 6 }}>
+                              <div><label>字号</label>
+                                <input type="number" value={selected.props.fontSize || 14} onChange={(e) => updateProps(selected.id, { fontSize: +e.target.value || 14 })} /></div>
+                              <div><label>对齐</label>
+                                <select value={selected.props.align || "left"} onChange={(e) => updateProps(selected.id, { align: e.target.value as any })}>
+                                  <option value="left">左</option><option value="center">中</option><option value="right">右</option>
+                                </select></div>
+                            </div>
+                            <div className="fld-check" style={{ marginTop: 4 }}>
+                              <input type="checkbox" checked={!!selected.props.bold} onChange={(e) => updateProps(selected.id, { bold: e.target.checked })} />
+                              <span>加粗</span>
+                            </div>
+                            <div className="empty-tip" style={{ marginTop: 4 }}>文本中输入 {"{{字段}}"} 引用数据，{"{{SUM(金额)}}"} 求和</div>
+                          </>
+                        )}
+                        {selected.type === "image" && (
+                          <div className="props" style={{ marginTop: 6 }}>
+                            <textarea placeholder="图片 URL" value={selected.props.src || ""} onChange={(e) => updateProps(selected.id, { src: e.target.value })} />
+                          </div>
+                        )}
+                        {(selected.type === "qrcode" || selected.type === "barcode") && (
+                          <div className="props" style={{ marginTop: 6 }}>
+                            <textarea value={selected.props.content || ""} onChange={(e) => updateProps(selected.id, { content: e.target.value })} />
+                          </div>
+                        )}
+                        {selected.type === "sign" && (
+                          <>
+                            <button className="btn-sm" onClick={() => setSignFor(selected.id)}>
+                              ✍️ {selected.props.src ? "重新手写签名" : "手写签名"}
+                            </button>
+                            {selected.props.src && (
+                              <button className="btn-sm" onClick={() => updateProps(selected.id, { src: undefined })}>清除签名</button>
+                            )}
+                          </>
+                        )}
+                        {selected.type === "table" && (
+                          <div className="prop-grid" style={{ marginTop: 6 }}>
+                            <div><label>行数</label>
+                              <input type="number" min={1} max={20} value={selected.props.rows || 3} onChange={(e) => updateProps(selected.id, { rows: Math.max(1, +e.target.value || 3) })} /></div>
+                            <div><label>列数</label>
+                              <input type="number" min={1} max={10} value={selected.props.cols || 3} onChange={(e) => updateProps(selected.id, { cols: Math.max(1, +e.target.value || 3) })} /></div>
+                          </div>
+                        )}
+                        {selected.type === "autotable" && (
+                          <div className="empty-tip" style={{ marginTop: 6 }}>显示字段在下方「模板设置」中勾选</div>
+                        )}
+                        <button className="btn-del" onClick={() => { setEls(els.filter((it) => it.id !== selected.id)); setSelectedId(null); }}>
+                          🗑 删除该元素
+                        </button>
+                      </div>
+                    )}
+                    <details className="fold"><summary>文档</summary><div className="fold-body">
+                      <div className="ps-row"><span>模板类型</span><span style={{ color: "var(--sub)" }}>{cur.kind === "record" ? "记录模板" : "视图模板"}</span></div>
+                      <div className="ps-row"><span>元素数量</span><span style={{ color: "var(--sub)" }}>{els.length}</span></div>
+                    </div></details>
+                    <details className="fold"><summary>页面设置</summary><div className="fold-body">
+                      <div className="ps-row"><span>纸张</span><span style={{ color: "var(--sub)" }}>{paper} · {landscape ? "横向" : "纵向"}</span></div>
+                      <div className="ps-row"><span>边距</span><span style={{ color: "var(--sub)" }}>上{margins.t} 下{margins.b} 左{margins.l} 右{margins.r} mm</span></div>
+                    </div></details>
+                    <details className="fold"><summary>模板设置</summary><div className="fold-body">
+                      <div className="sec-title" style={{ marginTop: 0 }}>自动表格 · 显示字段</div>
+                      {fieldNames.map((f) => (
+                        <label key={f} className="fld-check">
+                          <input type="checkbox" checked={autoFields.includes(f)}
+                            onChange={(e) => setAutoFields((prev) => (e.target.checked ? [...prev, f] : prev.filter((x) => x !== f)))} />
+                          <span>{f}</span>
+                        </label>
+                      ))}
+                    </div></details>
+                  </>
+                )}
+              </div></div>
             </div>
             <div className="side-foot">
               <span style={{ fontSize: 12, color: "var(--sub)" }}>快捷指南 ⓘ</span>
@@ -962,8 +1186,8 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                         <select value={landscape ? "l" : "p"} onChange={(e) => setLandscape(e.target.value === "l")}>
                           <option value="p">纵向</option><option value="l">横向</option>
                         </select></div>
-                      <div style={{ flex: 1 }}><label>边距mm</label>
-                        <input type="number" min={5} max={40} value={margin} onChange={(e) => setMargin(+e.target.value || 15)} /></div>
+                        <div style={{ flex: 1 }}><label>边距mm</label>
+                          <input type="number" min={0} max={60} value={margins.t} onChange={(e) => { const v = +e.target.value || 0; setMargins({ t: v, r: v, b: v, l: v }); }} /></div>
                     </div>
                     {cur.kind === "view" && (
                       <>
@@ -1015,8 +1239,9 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
           {view === "preview" ? (
             <div ref={previewRef}>
               {pages.map((pg, i) => (
-                <div key={i} className="paper" style={{ width: paperW + "mm", height: paperH + "mm", padding: margin + "mm" }}>
+                <div key={i} className="paper" style={{ width: paperW + "mm", height: paperH + "mm", padding: padStr }}>
                   <span className="paper-label">第 {i + 1} 页 / 共 {pages.length} 页</span>
+                  {wmLayer}
                   {els.map((el) => (
                     <div key={el.id} className={"el el-" + el.type}
                       style={{ left: el.x + "mm", top: el.y + "mm", width: el.w + "mm", height: el.h + "mm" }}>
@@ -1051,24 +1276,6 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   <button className="more-btn" onClick={() => setMorePop(!morePop)}>⋯ 更多</button>
                   {morePop && (
                     <span className="popover show right" onClick={(e) => e.stopPropagation()}>
-                      <label>纸张</label>
-                      <select value={paper} onChange={(e) => setPaper(e.target.value)}>
-                        <option value="A4">A4</option><option value="A5">A5</option><option value="letter">Letter</option>
-                      </select>
-                      <div className="row2">
-                        <div style={{ flex: 1 }}><label>方向</label>
-                          <select value={landscape ? "l" : "p"} onChange={(e) => setLandscape(e.target.value === "l")}>
-                            <option value="p">纵向</option><option value="l">横向</option>
-                          </select></div>
-                        <div style={{ flex: 1 }}><label>边距mm</label>
-                          <input type="number" min={5} max={40} value={margin} onChange={(e) => setMargin(+e.target.value || 15)} /></div>
-                      </div>
-                      {cur.kind === "view" && (
-                        <>
-                          <label>自动表格每页行数</label>
-                          <input type="number" min={1} max={30} value={perPage} onChange={(e) => setPerPage(+e.target.value || 8)} />
-                        </>
-                      )}
                       <button className="pop-item" style={{ marginTop: 8 }} onClick={exportHtml}>⬇ 导出 HTML</button>
                       <button className="pop-item" onClick={showGuide}>📖 使用指南</button>
                     </span>
@@ -1078,12 +1285,13 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
               <div
               ref={editorRef}
               className="paper"
-              style={{ width: paperW + "mm", height: paperH + "mm", padding: margin + "mm" }}
+              style={{ width: paperW + "mm", height: paperH + "mm", padding: padStr }}
               onDragOver={(e) => { e.preventDefault(); editorRef.current?.classList.add("dragover"); }}
               onDragLeave={() => editorRef.current?.classList.remove("dragover")}
               onDrop={onDrop}
               onMouseDown={(e) => { if (e.target === editorRef.current) setSelectedId(null); }}
             >
+              {wmLayer}
               {els.map((el) => (
                 <div key={el.id} data-id={el.id}
                   className={"el el-" + el.type + (el.id === selectedId ? " selected" : "")}
@@ -1150,8 +1358,9 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
       {/* 导出用隐藏容器（与预览相同内容） */}
       <div ref={exportRef} style={{ display: "none" }}>
         {pages.map((pg, i) => (
-          <div key={i} className="paper" style={{ width: paperW + "mm", height: paperH + "mm", padding: margin + "mm" }}>
+          <div key={i} className="paper" style={{ width: paperW + "mm", height: paperH + "mm", padding: padStr }}>
             <span className="paper-label">第 {i + 1} 页 / 共 {pages.length} 页</span>
+            {wmLayer}
             {els.map((el) => (
               <div key={el.id} className={"el el-" + el.type}
                 style={{ left: el.x + "mm", top: el.y + "mm", width: el.w + "mm", height: el.h + "mm" }}>
