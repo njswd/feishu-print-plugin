@@ -401,6 +401,10 @@
 .el-autotable table { width: 100%; border-collapse: collapse; }
 .el-autotable td, .el-autotable th { border: 1px solid #444; padding: 3px 5px; font-size: 12px; text-align: left; }
 .el-autotable th { background: #f2f2f2; }
+/* v1.1 自动表格列字段关联：编辑态数据行 chip + 列尾添加按钮 */
+.el-autotable th.at-add { cursor: pointer; text-align: center; color: #3370ff; background: #f0f4ff; font-weight: 400; width: 34px; }
+.el-autotable th.at-add:hover { background: #e1eaff; }
+.el-autotable .at-chip { cursor: pointer; }
 .el-img img { width: 100%; height: 100%; object-fit: contain; }
 /* 类型类名挂在内层 content div 上，用 .el 后代选择器保证优先级并恢复白底/居中 */
 .el-qr, .el-bar,
