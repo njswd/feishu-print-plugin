@@ -229,6 +229,22 @@ function calcGhostReflow(list: LayoutEl[], mode: string | undefined, areaW: numb
   if (!hasOverlapEls(list)) return null;
   return reflowEls(list, mode, areaW);
 }
+/** v1.5.2 同行顶部吸附：与已放置控件水平同行（y 区间重叠）且顶部不齐时，返回吸附目标（参考 DocuGenius 排版效果） */
+function rowAlignCalc(list: LayoutEl[], dragId: string): { y: number; x1: number; x2: number } | null {
+  const drag = list.find((e) => e.id === dragId);
+  if (!drag) return null;
+  let minY = Infinity, x1 = drag.x, x2 = drag.x + drag.w, found = false;
+  list.forEach((e) => {
+    if (e.id === dragId || e.type === "line") return;
+    if (e.y < drag.y + drag.h - 0.5 && e.y + e.h > drag.y + 0.5) {
+      found = true;
+      minY = Math.min(minY, e.y);
+      x1 = Math.min(x1, e.x); x2 = Math.max(x2, e.x + e.w);
+    }
+  });
+  if (!found || Math.abs(drag.y - minY) <= 0.5) return null;
+  return { y: minY, x1, x2 };
+}
 function fieldExists(f: string, names: string[]): boolean {
   const m = f.match(/^SUM\((.+)\)$/);
   const name = (m ? m[1] : f).trim();
@@ -389,7 +405,7 @@ export default function App() {
   const [atCtx, setAtCtx] = useState<{ elId: string; col: number; field: string | null; title: string } | null>(null); // v1.3 编辑列上下文（col=-1 列尾新增）
   const [acSearch, setAcSearch] = useState(""); // v1.3 编辑列对话框字段搜索
   const [atPop, setAtPop] = useState<{ elId: string; col: number; field: string; ok: boolean; x: number; y: number } | null>(null); // v1.4 自动表格 chip 气泡
-  const [ghost, setGhost] = useState<{ list: LayoutEl[]; activeId: string } | null>(null); // v1.5.1 拖动实时排版预览
+  const [ghost, setGhost] = useState<{ list: LayoutEl[]; activeId: string; refLine?: { y: number; x1: number; x2: number } } | null>(null); // v1.5.1 拖动实时排版预览（v1.5.2 加同行吸附参考线）
 
   const editorRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -844,18 +860,30 @@ export default function App() {
         return { ...it, w: Math.max(3, ow + dx), h: Math.max(2, oh + dy) };
       });
       setEls(last);
-      /* v1.5.1 拖到其他控件上方时，实时显示下一步排版式样（虚线框） */
+      /* v1.5.1 重叠 → 重排式样虚影；v1.5.2 同行 → 顶部吸附线 + 对齐虚影 */
       const g = calcGhostReflow(last, pgSet.layoutMode, innerArea().w);
-      setGhost(g ? { list: g, activeId: el.id } : null);
+      if (g) setGhost({ list: g, activeId: el.id });
+      else {
+        const al = rowAlignCalc(last, el.id);
+        if (al) {
+          const d = last.find((it) => it.id === el.id)!;
+          setGhost({ list: [{ ...d, y: al.y }], activeId: el.id, refLine: al });
+        } else setGhost(null);
+      }
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       setGhost(null);
       if (last) {
-        /* 按预览式样落位 */
+        let next = last;
         const mode = pgSet.layoutMode;
-        const next = mode && mode !== "off" && hasOverlapEls(last) ? reflowEls(last, mode, innerArea().w) : last;
+        if (mode && mode !== "off" && hasOverlapEls(last)) next = reflowEls(last, mode, innerArea().w);
+        else {
+          /* 同行 → 顶部对齐吸附（只动被拖控件，对方不动） */
+          const al = rowAlignCalc(last, el.id);
+          if (al) next = last.map((it) => (it.id === el.id ? { ...it, y: al.y } : it));
+        }
         setEls(next);
         commit(next);
       }
@@ -1212,7 +1240,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                         </select></div>
                       <div />
                     </div>
-                    <div className="empty-tip" style={{ marginTop: 4 }}>拖动控件到其他控件上方时，实时显示重排式样（虚线框），松手自动落位，不允许堆叠</div>
+                    <div className="empty-tip" style={{ marginTop: 4 }}>拖到其他控件上方：显示重排式样（虚线框），松手自动落位；与控件水平同行：自动顶部对齐（红色吸附线）</div>
                     <div className="ps-sec">页头页尾配置</div>
                     <div className="ps-row"><span>显示页头页尾</span>
                       <label className="sw"><input type="checkbox" checked={pgSet.hfShow} onChange={(e) => setPgSet({ ...pgSet, hfShow: e.target.checked })} /><i></i></label></div>
@@ -1589,13 +1617,17 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   <div className="resize-handle" onMouseDown={(e) => startDrag(e, el, "resize")} />
                 </div>
               ))}
-              {/* v1.5.1 拖动实时排版预览：重叠时显示重排式样虚线框 */}
+              {/* v1.5.1 拖动实时排版预览：重叠时显示重排式样虚线框；v1.5.2 同行时显示顶部吸附线 */}
               {ghost && (
                 <div className="ghost-layer">
                   {ghost.list.map((g) => (
                     <div key={g.id} className={"ghost-el" + (g.id === ghost.activeId ? " active" : "")}
                       style={{ left: g.x + "mm", top: g.y + "mm", width: g.w + "mm", height: g.h + "mm" }} />
                   ))}
+                  {ghost.refLine && (
+                    <div className="ghost-refline"
+                      style={{ top: ghost.refLine.y + "mm", left: ghost.refLine.x1 + "mm", width: (ghost.refLine.x2 - ghost.refLine.x1) + "mm" }} />
+                  )}
                 </div>
               )}
               {/* v1.1 输入【快速插入字段：光标处字段选择浮层 */}

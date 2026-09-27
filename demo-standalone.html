@@ -76,6 +76,8 @@
   #ghostLayer{position:absolute; left:0; top:0; right:0; bottom:0; pointer-events:none; z-index:60;}
   #ghostLayer .ghost-el{position:absolute; border:1.5px dashed var(--blue); background:rgba(51,112,255,.07); border-radius:3px; box-sizing:border-box;}
   #ghostLayer .ghost-el.active{border-style:solid; background:rgba(51,112,255,.14); box-shadow:0 2px 10px rgba(51,112,255,.25);}
+  /* v1.5.2 同行顶部吸附对齐参考线 */
+  #ghostLayer .ghost-refline{position:absolute; height:0; border-top:2px solid #f54a45; box-shadow:0 0 4px rgba(245,74,69,.5);}
   .el-text .content{line-height:1.6; word-break:break-all; white-space:pre-wrap;}
   .el-line{border-top:1.5px solid #333;}
   .el-table table{width:100%; height:100%; border-collapse:collapse;}
@@ -882,7 +884,7 @@ function renderPanelPage(){
   /* v1.5 自动排版：控件重叠时不允许堆叠，自动换行或排成双列 */
   html += '<div class="ps-sec">自动排版</div>';
   html += '<div class="ps-grid"><div><label>堆叠处理 ⓘ</label><select id="psLayout"><option value="off">不重排</option><option value="wrap">重叠时自动换行</option><option value="cols2">重叠时排成双列</option></select></div><div></div></div>';
-  html += '<div class="empty-tip" style="margin-top:4px">拖动控件到其他控件上方时，实时显示重排式样（虚线框），松手自动落位，不允许堆叠</div>';
+  html += '<div class="empty-tip" style="margin-top:4px">拖到其他控件上方：显示重排式样（虚线框），松手自动落位；与控件水平同行：自动顶部对齐（红色吸附线）</div>';
   html += '<div class="ps-sec">页头页尾配置</div>';
   html += '<div class="ps-row"><span>显示页头页尾</span><label class="sw"><input type="checkbox" id="psHf"'+(g.hfShow?" checked":"")+'><i></i></label></div>';
   if(g.hfShow){
@@ -1288,15 +1290,25 @@ function bindElDrag(div, el){
       el.x = ox + (e.clientX-startX)/MM; el.y = oy + (e.clientY-startY)/MM;
       div.style.left = el.x+"mm"; div.style.top = el.y+"mm";
       moveFloatBar(el);
-      /* v1.5.1 拖到其他控件上方时，实时显示下一步排版式样（虚线框） */
+      /* v1.5.1 重叠 → 实时显示重排式样；v1.5.2 同行 → 顶部吸附线 + 对齐虚影 */
       var g = calcGhostReflow();
-      if(g) showGhost(g, el.id); else hideGhost();
+      if(g) showGhost(g, el.id);
+      else{
+        var al = rowAlignCalc(el.id);
+        if(al) showGhostAlign({ x: el.x, y: al.y, w: el.w, h: el.h }, al);
+        else hideGhost();
+      }
     }
     function onUp(){
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       hideGhost();
-      if(autoReflow()) renderContent(); /* 按预览式样落位 */
+      var did = autoReflow(); /* 重叠 → 按预览式样落位 */
+      if(!did){
+        var al = rowAlignCalc(el.id); /* 同行 → 顶部对齐吸附（只动被拖控件，对方不动） */
+        if(al){ el.y = al.y; did = true; }
+      }
+      if(did) renderContent();
       commit(); saveState();
     }
     document.addEventListener("mousemove", onMove);
@@ -1474,6 +1486,33 @@ function showGhost(list, activeId){
 function hideGhost(){
   var layer = $("ghostLayer");
   if(layer) layer.innerHTML = "";
+}
+/* ===== v1.5.2 同行顶部吸附对齐：与已放置控件水平同行时，吸附其顶部（参考 DocuGenius 排版效果） ===== */
+function rowAlignCalc(dragId){
+  var mode = state.pgSet.layoutMode;
+  if(!mode || mode === "off") return null;
+  var drag = els().find(function(e){ return e.id === dragId; });
+  if(!drag) return null;
+  var minY = Infinity, x1 = drag.x, x2 = drag.x + drag.w, found = false;
+  els().forEach(function(e){
+    if(e.id === dragId || e.type === "line") return;
+    if(e.y < drag.y + drag.h - 0.5 && e.y + e.h > drag.y + 0.5){ /* y 区间重叠 = 视觉同行 */
+      found = true;
+      minY = Math.min(minY, e.y);
+      x1 = Math.min(x1, e.x); x2 = Math.max(x2, e.x + e.w);
+    }
+  });
+  if(!found || Math.abs(drag.y - minY) <= 0.5) return null; /* 已对齐则不吸附 */
+  return { y: minY, x1: x1, x2: x2 };
+}
+function showGhostAlign(dragPos, line){
+  var paper = $("editorPaper");
+  if(!paper) return;
+  var layer = $("ghostLayer");
+  if(!layer){ layer = document.createElement("div"); layer.id = "ghostLayer"; paper.appendChild(layer); }
+  layer.innerHTML =
+    '<div class="ghost-el active" style="left:'+dragPos.x+'mm;top:'+dragPos.y+'mm;width:'+dragPos.w+'mm;height:'+dragPos.h+'mm"></div>' +
+    '<div class="ghost-refline" style="top:'+line.y+'mm;left:'+line.x1+'mm;width:'+(line.x2-line.x1)+'mm"></div>';
 }
 function autoReflow(){ /* 触发式重排：仅在开启模式且存在重叠时执行，返回是否发生重排 */
   var mode = state.pgSet.layoutMode;

@@ -489,3 +489,5 @@
 .ghost-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; z-index: 60; }
 .ghost-layer .ghost-el { position: absolute; border: 1.5px dashed #3370ff; background: rgba(51, 112, 255, 0.07); border-radius: 3px; box-sizing: border-box; }
 .ghost-layer .ghost-el.active { border-style: solid; background: rgba(51, 112, 255, 0.14); box-shadow: 0 2px 10px rgba(51, 112, 255, 0.25); }
+/* ===== v1.5.2 同行顶部吸附对齐参考线 ===== */
+.ghost-layer .ghost-refline { position: absolute; height: 0; border-top: 2px solid #f54a45; box-shadow: 0 0 4px rgba(245, 74, 69, 0.5); }
