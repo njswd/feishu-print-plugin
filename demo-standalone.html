@@ -718,13 +718,6 @@ var LOOP_FIELDS = ["商品名称","型号","规格","数量","单价","金额"];
 /* 系统字段（演示）：不在数据表明细里，渲染时从 SYS_DATA 取值 */
 var SYS_DATA = { "公司名称":"点火科技公司", "公司地址":"江苏省南京市溧水区", "客服电话":"198-8888-8888", "公司邮箱":"service@example.com" };
 
-function fieldMeta(f){
-  var v = RECORDS[0] ? RECORDS[0][f] : undefined;
-  var s = v === undefined || v === null ? "" : String(v);
-  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return { ic:"▦", type:"日期" };
-  if(s !== "" && !isNaN(+s)) return { ic:"Σ", type:"数字" };
-  return { ic:"A≡", type:"文本" };
-}
 function fieldExists(f){
   var m = f.match(/^SUM\((.+)\)$/);
   var name = (m ? m[1] : f).trim();
@@ -1506,10 +1499,13 @@ var chipPopEl = null;
 
 function removeChipPop(){ if(chipPopEl){ chipPopEl.remove(); chipPopEl = null; } }
 
+/* 字段类型元信息（数据源面板 + 更换字段对话框共用）：ic=类型图标 type=类型文案 */
 function fieldMeta(name){
   var v = RECORDS[0] ? RECORDS[0][name] : undefined;
-  var isNum = v !== undefined && v !== null && v !== "" && !isNaN(+v);
-  return { icon: isNum ? "#" : "T", type: isNum ? "数字" : "文本" };
+  var s = v === undefined || v === null ? "" : String(v);
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return { ic:"▦", type:"日期" };
+  if(s !== "" && !isNaN(+s)) return { ic:"Σ", type:"数字" };
+  return { ic:"A≡", type:"文本" };
 }
 
 /* 捕获阶段拦截：点 chip / 气泡时不触发元素拖动 */
@@ -1592,7 +1588,7 @@ function renderFieldList(q){
     .map(function(f){
       var m = fieldMeta(f);
       return '<div class="fm-item" data-f="'+esc(f)+'">' +
-        '<span class="fm-ic">'+m.icon+'</span>' +
+        '<span class="fm-ic">'+m.ic+'</span>' +
         '<span class="fm-txt"><b>'+esc(f)+'</b><i>'+m.type+'</i></span></div>';
     }).join("");
   list.innerHTML = html || '<div class="fm-item" style="cursor:default"><span class="fm-ic">∅</span><span class="fm-txt"><b>无匹配字段</b></span></div>';
