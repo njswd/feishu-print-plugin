@@ -106,6 +106,29 @@
   .chip-caret{font-style:normal; opacity:.65; font-size:.85em;}
   .grow{flex:1;}
 
+  /* ===== v0.7 浮动工具条 + 拖动手柄 ===== */
+  .float-bar{position:absolute; z-index:20;}
+  .fb-wrap{position:relative; display:flex; align-items:center; gap:2px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.14); padding:3px;}
+  .fb-btn{border:none; background:none; padding:4px 8px; font-size:12px; cursor:pointer; border-radius:6px; white-space:nowrap; color:var(--ink);}
+  .fb-btn:hover{background:var(--card);}
+  .fb-btn.fb-del:hover{background:#fff1f0; color:var(--danger);}
+  .fb-pop{position:absolute; top:34px; left:0; display:none; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.14); padding:6px; z-index:30; min-width:110px;}
+  .fb-pop.show{display:block;}
+  .fb-pop .mi{display:block; width:100%; text-align:left; border:none; background:none; padding:6px 9px; font-size:12px; cursor:pointer; border-radius:5px; color:var(--ink); white-space:nowrap;}
+  .fb-pop .mi:hover{background:var(--card);}
+  .fb-pos{min-width:160px; padding:8px;}
+  .fb-pos.show{display:grid; grid-template-columns:1fr 1fr; gap:6px;}
+  .fb-pos label{font-size:10.5px; color:var(--sub); display:block;}
+  .fb-pos input{width:100%; padding:3px 6px; border:1px solid var(--line); border-radius:5px; font-size:12px;}
+  .drag-handle{
+    position:absolute; left:-8mm; top:0; width:6mm; height:6mm;
+    display:none; align-items:center; justify-content:center;
+    background:#fff; border:1px solid var(--blue); color:var(--blue);
+    border-radius:4px; cursor:grab; font-size:11px; z-index:6;
+    box-shadow:0 1px 4px rgba(0,0,0,.15); user-select:none;
+  }
+  .el.selected .drag-handle{display:flex;}
+
   /* ===== 编辑模式左侧 ===== */
   .ed-sec{padding:0 12px;}
   .sec-title{font-size:12px; color:var(--sub); margin:12px 0 6px; font-weight:600;}
@@ -146,6 +169,7 @@
     .paper-label{display:none;}
     .el{outline:none !important;}
     .resize-handle{display:none !important;}
+    .float-bar, .drag-handle{display:none !important;}
     @page{margin:0;}
   }
 </style>
@@ -765,7 +789,7 @@ function renderContent(){
     div.style.left = el.x+"mm"; div.style.top = el.y+"mm";
     div.style.width = el.w+"mm"; div.style.height = el.h+"mm";
     div.dataset.id = el.id;
-    div.innerHTML = renderElContent(el, curTpl().kind==="record" ? curRec() : null, [], true) + '<div class="resize-handle"></div>';
+    div.innerHTML = renderElContent(el, curTpl().kind==="record" ? curRec() : null, [], true) + '<div class="drag-handle" title="拖动移动">✥</div><div class="resize-handle"></div>';
     paper.appendChild(div);
 
     if(TEXT_LIKE.indexOf(el.type) >= 0){
@@ -801,15 +825,16 @@ function renderContent(){
     bindElDrag(div, el);
     paintCodes(div);
   });
+  buildFloatBar();
   renderProps();
 }
 
 /* =====================================================================
- * 编辑器：拖拽 / 属性 / 签名
+ * 编辑器：拖拽 / 浮动工具条 / 属性 / 签名
  * ===================================================================== */
 var dragType = null;
 function bindElDrag(div, el){
-  div.addEventListener("mousedown", function(ev){
+  function startMove(ev){
     if(ev.target.classList.contains("resize-handle")) return;
     state.selectedId = el.id;
     ev.stopPropagation();
@@ -820,6 +845,7 @@ function bindElDrag(div, el){
     function onMove(e){
       el.x = ox + (e.clientX-startX)/MM; el.y = oy + (e.clientY-startY)/MM;
       div.style.left = el.x+"mm"; div.style.top = el.y+"mm";
+      moveFloatBar(el);
     }
     function onUp(){
       document.removeEventListener("mousemove", onMove);
@@ -828,23 +854,137 @@ function bindElDrag(div, el){
     }
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  });
+  }
+  div.addEventListener("mousedown", startMove);
+  var dh = div.querySelector(".drag-handle");
+  if(dh) dh.addEventListener("mousedown", startMove);
   var handle = div.querySelector(".resize-handle");
-  handle.addEventListener("mousedown", function(ev){
-    ev.stopPropagation(); ev.preventDefault();
-    var startX = ev.clientX, startY = ev.clientY, ow = el.w, oh = el.h;
-    function onMove(e){
-      el.w = Math.max(5, ow+(e.clientX-startX)/MM); el.h = Math.max(3, oh+(e.clientY-startY)/MM);
-      div.style.width = el.w+"mm"; div.style.height = el.h+"mm";
-    }
-    function onUp(){
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      commit(); saveState();
-    }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+  if(handle){
+    handle.addEventListener("mousedown", function(ev){
+      ev.stopPropagation(); ev.preventDefault();
+      var startX = ev.clientX, startY = ev.clientY, ow = el.w, oh = el.h;
+      function onMove(e){
+        el.w = Math.max(5, ow+(e.clientX-startX)/MM); el.h = Math.max(3, oh+(e.clientY-startY)/MM);
+        div.style.width = el.w+"mm"; div.style.height = el.h+"mm";
+        moveFloatBar(el);
+      }
+      function onUp(){
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        commit(); saveState();
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+  }
+}
+
+/* ===== v0.7 浮动工具条 ===== */
+var floatBar = null;
+function buildFloatBar(){
+  floatBar = null;
+  var sel = selected();
+  if(!sel) return;
+  var paper = $("editorPaper");
+  var bar = document.createElement("div");
+  bar.className = "float-bar";
+  bar.style.left = sel.x + "mm";
+  bar.style.top = (sel.y > 12 ? sel.y - 9 : sel.y + sel.h + 2) + "mm";
+  bar.innerHTML =
+    '<div class="fb-wrap">' +
+    '<button class="fb-btn" data-act="align">≡ 对齐 ▾</button>' +
+    '<button class="fb-btn" data-act="edit">✏️ 编辑</button>' +
+    '<button class="fb-btn" data-act="pos">⌖ 位置</button>' +
+    '<button class="fb-btn" data-act="copy">⧉ 复制</button>' +
+    '<button class="fb-btn fb-del" data-act="del" title="删除">🗑</button>' +
+    '<div class="fb-pop" id="alignPop">' +
+    '<button class="mi" data-align="left">⇤ 左对齐</button>' +
+    '<button class="mi" data-align="hcenter">↔ 水平居中</button>' +
+    '<button class="mi" data-align="right">⇥ 右对齐</button>' +
+    '<button class="mi" data-align="top">⇧ 顶对齐</button>' +
+    '<button class="mi" data-align="vcenter">↕ 垂直居中</button>' +
+    '<button class="mi" data-align="bottom">⇩ 底对齐</button>' +
+    '</div>' +
+    '<div class="fb-pop fb-pos" id="posPop">' +
+    '<div><label>X(mm)</label><input id="fbx" type="number" value="'+sel.x.toFixed(1)+'"></div>' +
+    '<div><label>Y(mm)</label><input id="fby" type="number" value="'+sel.y.toFixed(1)+'"></div>' +
+    '<div><label>宽(mm)</label><input id="fbw" type="number" value="'+sel.w.toFixed(1)+'"></div>' +
+    '<div><label>高(mm)</label><input id="fbh" type="number" value="'+sel.h.toFixed(1)+'"></div>' +
+    '</div></div>';
+  paper.appendChild(bar);
+  floatBar = bar;
+
+  bar.addEventListener("mousedown", function(ev){ ev.stopPropagation(); });
+  bar.querySelectorAll(".fb-btn").forEach(function(b){
+    b.addEventListener("click", function(ev){
+      ev.stopPropagation();
+      var act = b.dataset.act;
+      if(act === "align"){ $("alignPop").classList.toggle("show"); $("posPop").classList.remove("show"); }
+      else if(act === "pos"){ $("posPop").classList.toggle("show"); $("alignPop").classList.remove("show"); }
+      else if(act === "edit") fbEdit(sel);
+      else if(act === "copy") fbCopy(sel);
+      else if(act === "del") fbDelete(sel);
+    });
   });
+  $("alignPop").querySelectorAll(".mi").forEach(function(mi){
+    mi.addEventListener("click", function(ev){ ev.stopPropagation(); alignSel(sel, mi.dataset.align); });
+  });
+  [["fbx","x"],["fby","y"],["fbw","w"],["fbh","h"]].forEach(function(pair){
+    var n = $(pair[0]); if(!n) return;
+    n.addEventListener("input", function(){
+      var v = +this.value || 0;
+      if(pair[1] === "w") v = Math.max(3, v);
+      if(pair[1] === "h") v = Math.max(2, v);
+      sel[pair[1]] = v;
+      var elDiv = paper.querySelector('.el[data-id="'+sel.id+'"]');
+      if(elDiv){ elDiv.style.left = sel.x+"mm"; elDiv.style.top = sel.y+"mm"; elDiv.style.width = sel.w+"mm"; elDiv.style.height = sel.h+"mm"; }
+      bar.style.left = sel.x + "mm";
+      bar.style.top = (sel.y > 12 ? sel.y - 9 : sel.y + sel.h + 2) + "mm";
+    });
+    n.addEventListener("change", function(){ commit(); saveState(); });
+  });
+}
+function moveFloatBar(el){
+  if(!floatBar) return;
+  floatBar.style.left = el.x + "mm";
+  floatBar.style.top = (el.y > 12 ? el.y - 9 : el.y + el.h + 2) + "mm";
+}
+function innerArea(){
+  var s = SIZES[state.paper];
+  return { w: (state.landscape ? s[1] : s[0]) - state.margin*2, h: (state.landscape ? s[0] : s[1]) - state.margin*2 };
+}
+function alignSel(el, dir){
+  var a = innerArea();
+  if(dir==="left") el.x = 0;
+  if(dir==="hcenter") el.x = Math.round((a.w - el.w)/2*10)/10;
+  if(dir==="right") el.x = Math.round((a.w - el.w)*10)/10;
+  if(dir==="top") el.y = 0;
+  if(dir==="vcenter") el.y = Math.round((a.h - el.h)/2*10)/10;
+  if(dir==="bottom") el.y = Math.round((a.h - el.h)*10)/10;
+  commit(); renderContent(); saveState();
+}
+function fbEdit(el){
+  if(TEXT_LIKE.indexOf(el.type) >= 0){
+    var ce = document.querySelector('.el[data-id="'+el.id+'"] [contenteditable]');
+    if(ce) ce.focus();
+  }else{
+    $("posPop").classList.add("show"); $("alignPop").classList.remove("show");
+  }
+}
+function fbCopy(el){
+  var clone = JSON.parse(JSON.stringify(el));
+  clone.id = nextElId();
+  clone.x = Math.round((el.x + 5)*10)/10;
+  clone.y = Math.round((el.y + 5)*10)/10;
+  els().push(clone);
+  state.selectedId = clone.id;
+  commit(); renderContent(); saveState();
+}
+function fbDelete(el){
+  var t = curTpl();
+  t.elements = t.elements.filter(function(x){ return x.id !== el.id; });
+  state.selectedId = null;
+  commit(); renderContent(); saveState();
 }
 
 document.addEventListener("dragover", function(e){

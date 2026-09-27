@@ -107,6 +107,44 @@
 }
 .chip-caret { font-style: normal; opacity: .65; font-size: .85em; }
 
+/* ---------- v0.7 浮动工具条 + 拖动手柄 ---------- */
+.float-bar { position: absolute; z-index: 20; }
+.fb-wrap {
+  position: relative; display: flex; align-items: center; gap: 2px;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .14); padding: 3px;
+}
+.fb-btn {
+  border: none; background: none; padding: 4px 8px; font-size: 12px;
+  cursor: pointer; border-radius: 6px; white-space: nowrap; color: var(--ink);
+}
+.fb-btn:hover { background: var(--card); }
+.fb-btn.fb-del:hover { background: #fff1f0; color: var(--danger); }
+.fb-pop {
+  position: absolute; top: 34px; left: 0; display: none;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .14); padding: 6px; z-index: 30; min-width: 110px;
+}
+.fb-pop.show { display: block; }
+.fb-pop .mi {
+  display: block; width: 100%; text-align: left;
+  border: none; background: none; padding: 6px 9px;
+  font-size: 12px; cursor: pointer; border-radius: 5px; color: var(--ink); white-space: nowrap;
+}
+.fb-pop .mi:hover { background: var(--card); }
+.fb-pos { min-width: 160px; padding: 8px; }
+.fb-pos.show { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fb-pos label { font-size: 10.5px; color: var(--sub); display: block; }
+.fb-pos input { width: 100%; padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; }
+.drag-handle {
+  position: absolute; left: -8mm; top: 0; width: 6mm; height: 6mm;
+  display: none; align-items: center; justify-content: center;
+  background: #fff; border: 1px solid var(--blue); color: var(--blue);
+  border-radius: 4px; cursor: grab; font-size: 11px; z-index: 6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .15); user-select: none;
+}
+.el.selected .drag-handle { display: flex; }
+
 /* ---------- 左侧：元素库 / 属性（编辑态）---------- */
 .sec-title { font-size: 12px; color: var(--sub); margin: 12px 0 6px; font-weight: 600; }
 .palette { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
@@ -295,5 +333,6 @@
   .el { outline: none !important; }
   .el .content[contenteditable] { outline: none; }
   .resize-handle { display: none !important; }
+  .float-bar, .drag-handle { display: none !important; }
   @page { margin: 0; }
 }

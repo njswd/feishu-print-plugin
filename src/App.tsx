@@ -232,6 +232,8 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [paperPop, setPaperPop] = useState(false);
   const [morePop, setMorePop] = useState(false);
+  const [alignPop, setAlignPop] = useState(false);
+  const [posPop, setPosPop] = useState(false);
   const [signFor, setSignFor] = useState<string | null>(null);
   const [paper, setPaper] = useState("A4");
   const [landscape, setLandscape] = useState(false);
@@ -311,7 +313,48 @@ export default function App() {
     setSelectedId(null);
   }
   function showGuide() {
-    alert("快捷指南：\n\n1. 从左侧「组件」拖元素到纸张排版；\n2. 双击文本直接编辑，输入 {{字段名}} 引用表格字段，输入 {{SUM(金额)}} 对整页求和；\n3. 顶栏支持清空 / 撤销 / 重做；\n4. 右上「⋯ 更多」可修改纸张参数、导出 HTML；\n5. 新建模板：预览页左下角「＋ 创建模板」。");
+    alert("快捷指南：\n\n1. 从左侧「组件」拖元素到纸张排版；\n2. 双击文本直接编辑，输入 {{字段名}} 引用表格字段，输入 {{SUM(金额)}} 对整页求和；\n3. 点击元素出现浮动工具条：对齐 / 编辑 / 位置 / 复制 / 删除；\n4. 顶栏支持清空 / 撤销 / 重做；\n5. 右上「⋯ 更多」可修改纸张参数、导出 HTML；\n6. 新建模板：预览页左下角「＋ 创建模板」。");
+  }
+
+  /* ---------- 浮动工具条（v0.7）---------- */
+  useEffect(() => { setAlignPop(false); setPosPop(false); }, [selectedId, view]);
+  const innerArea = () => ({ w: paperW - margin * 2, h: paperH - margin * 2 });
+  function alignSel(dir: string) {
+    if (!selected) return;
+    const a = innerArea();
+    let x = selected.x, y = selected.y;
+    if (dir === "left") x = 0;
+    if (dir === "hcenter") x = Math.round(((a.w - selected.w) / 2) * 10) / 10;
+    if (dir === "right") x = Math.round((a.w - selected.w) * 10) / 10;
+    if (dir === "top") y = 0;
+    if (dir === "vcenter") y = Math.round(((a.h - selected.h) / 2) * 10) / 10;
+    if (dir === "bottom") y = Math.round((a.h - selected.h) * 10) / 10;
+    mutateEls((list) => list.map((it) => (it.id === selected.id ? { ...it, x, y } : it)));
+    setAlignPop(false);
+  }
+  function fbCopy() {
+    if (!selected) return;
+    const clone: LayoutEl = {
+      ...JSON.parse(JSON.stringify(selected)),
+      id: nextElId(),
+      x: Math.round((selected.x + 5) * 10) / 10,
+      y: Math.round((selected.y + 5) * 10) / 10,
+    };
+    mutateEls((list) => [...list, clone]);
+    setSelectedId(clone.id);
+  }
+  function fbDelete() {
+    if (!selected) return;
+    mutateEls((list) => list.filter((it) => it.id !== selected.id));
+    setSelectedId(null);
+  }
+  function fbEdit() {
+    if (!selected) return;
+    if (TEXT_LIKE.includes(selected.type)) {
+      setTimeout(() => {
+        document.querySelector<HTMLElement>('.el[data-id="' + selected.id + '"] [contenteditable]')?.focus();
+      }, 0);
+    } else { setPosPop(true); setAlignPop(false); }
   }
 
   /* ---------- 自动保存 / 加载 ---------- */
@@ -932,14 +975,54 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
               onMouseDown={(e) => { if (e.target === editorRef.current) setSelectedId(null); }}
             >
               {els.map((el) => (
-                <div key={el.id}
+                <div key={el.id} data-id={el.id}
                   className={"el el-" + el.type + (el.id === selectedId ? " selected" : "")}
                   style={{ left: el.x + "mm", top: el.y + "mm", width: el.w + "mm", height: el.h + "mm" }}
                   onMouseDown={(e) => startDrag(e, el, "move")}>
                   {elContent(el, cur.kind === "record" ? records[currentRec]?.data || {} : null, undefined, true)}
+                  <div className="drag-handle" title="拖动移动" onMouseDown={(e) => startDrag(e, el, "move")}>✥</div>
                   <div className="resize-handle" onMouseDown={(e) => startDrag(e, el, "resize")} />
                 </div>
               ))}
+              {selected && (
+                <div className="float-bar"
+                  style={{ left: selected.x + "mm", top: (selected.y > 12 ? selected.y - 9 : selected.y + selected.h + 2) + "mm" }}
+                  onMouseDown={(e) => e.stopPropagation()}>
+                  <div className="fb-wrap">
+                    <button className="fb-btn" onClick={() => { setAlignPop(!alignPop); setPosPop(false); }}>≡ 对齐 ▾</button>
+                    <button className="fb-btn" onClick={fbEdit}>✏️ 编辑</button>
+                    <button className="fb-btn" onClick={() => { setPosPop(!posPop); setAlignPop(false); }}>⌖ 位置</button>
+                    <button className="fb-btn" onClick={fbCopy}>⧉ 复制</button>
+                    <button className="fb-btn fb-del" title="删除" onClick={fbDelete}>🗑</button>
+                    {alignPop && (
+                      <div className="fb-pop show">
+                        <button className="mi" onClick={() => alignSel("left")}>⇤ 左对齐</button>
+                        <button className="mi" onClick={() => alignSel("hcenter")}>↔ 水平居中</button>
+                        <button className="mi" onClick={() => alignSel("right")}>⇥ 右对齐</button>
+                        <button className="mi" onClick={() => alignSel("top")}>⇧ 顶对齐</button>
+                        <button className="mi" onClick={() => alignSel("vcenter")}>↕ 垂直居中</button>
+                        <button className="mi" onClick={() => alignSel("bottom")}>⇩ 底对齐</button>
+                      </div>
+                    )}
+                    {posPop && (
+                      <div className="fb-pop fb-pos show">
+                        <div><label>X(mm)</label>
+                          <input type="number" value={Math.round(selected.x * 10) / 10}
+                            onChange={(e) => mutateEls((list) => list.map((it) => (it.id === selected.id ? { ...it, x: +e.target.value || 0 } : it)))} /></div>
+                        <div><label>Y(mm)</label>
+                          <input type="number" value={Math.round(selected.y * 10) / 10}
+                            onChange={(e) => mutateEls((list) => list.map((it) => (it.id === selected.id ? { ...it, y: +e.target.value || 0 } : it)))} /></div>
+                        <div><label>宽(mm)</label>
+                          <input type="number" value={Math.round(selected.w * 10) / 10}
+                            onChange={(e) => mutateEls((list) => list.map((it) => (it.id === selected.id ? { ...it, w: Math.max(3, +e.target.value || 3) } : it)))} /></div>
+                        <div><label>高(mm)</label>
+                          <input type="number" value={Math.round(selected.h * 10) / 10}
+                            onChange={(e) => mutateEls((list) => list.map((it) => (it.id === selected.id ? { ...it, h: Math.max(2, +e.target.value || 2) } : it)))} /></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               </div>
             </>
           )}
