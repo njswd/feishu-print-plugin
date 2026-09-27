@@ -228,6 +228,7 @@ export default function App() {
   const [currentRec, setCurrentRec] = useState(0);
   const [batch, setBatch] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null); // 双击进入编辑的元素/单元格
   const [autoFields, setAutoFields] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [paperPop, setPaperPop] = useState(false);
@@ -317,7 +318,7 @@ export default function App() {
   }
 
   /* ---------- 浮动工具条（v0.7）---------- */
-  useEffect(() => { setAlignPop(false); setPosPop(false); }, [selectedId, view]);
+  useEffect(() => { setAlignPop(false); setPosPop(false); setEditingKey(null); }, [selectedId, view]);
   const innerArea = () => ({ w: paperW - margin * 2, h: paperH - margin * 2 });
   function alignSel(dir: string) {
     if (!selected) return;
@@ -351,8 +352,10 @@ export default function App() {
   function fbEdit() {
     if (!selected) return;
     if (TEXT_LIKE.includes(selected.type)) {
+      const id = selected.id;
+      setEditingKey(id);
       setTimeout(() => {
-        document.querySelector<HTMLElement>('.el[data-id="' + selected.id + '"] [contenteditable]')?.focus();
+        document.querySelector<HTMLElement>('.el[data-id="' + id + '"] [contenteditable]')?.focus();
       }, 0);
     } else { setPosPop(true); setAlignPop(false); }
   }
@@ -496,11 +499,19 @@ export default function App() {
       case "article":
       case "attach":
         if (edit) {
+          const editing = editingKey === el.id;
           return (
-            <div className="content editable" style={style} contentEditable suppressContentEditableWarning
+            <div className="content editable" style={style} contentEditable={editing} suppressContentEditableWarning
               dangerouslySetInnerHTML={{ __html: richEditHTML(p.content || "双击编辑文本") }}
-              onMouseDown={(e) => e.stopPropagation()}
-              onBlur={(e) => updateProps(el.id, { content: richToRaw(e.currentTarget) })} />
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setEditingKey(el.id);
+                setTimeout(() => {
+                  document.querySelector<HTMLElement>('.el[data-id="' + el.id + '"] [contenteditable]')?.focus();
+                }, 0);
+              }}
+              onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
+              onBlur={(e) => { updateProps(el.id, { content: richToRaw(e.currentTarget) }); setEditingKey(null); }} />
           );
         }
         return <div className="content" style={style}>{renderTpl(p.content || "", data, rowsData)}</div>;
@@ -527,14 +538,24 @@ export default function App() {
                 <tr key={r}>
                   {Array.from({ length: cols }, (_, c) => {
                     const raw = p.cells?.[r]?.[c] || "";
+                    const cellKey = el.id + ":" + r + ":" + c;
                     return edit ? (
-                      <td key={c} style={{ textAlign: p.align || "left" }} contentEditable suppressContentEditableWarning
+                      <td key={c} data-cell={r + "-" + c} style={{ textAlign: p.align || "left" }}
+                        contentEditable={editingKey === cellKey} suppressContentEditableWarning
                         dangerouslySetInnerHTML={{ __html: richEditHTML(raw) }}
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setEditingKey(cellKey);
+                          setTimeout(() => {
+                            document.querySelector<HTMLElement>('.el[data-id="' + el.id + '"] td[data-cell="' + (r + "-" + c) + '"]')?.focus();
+                          }, 0);
+                        }}
+                        onMouseDown={(e) => { if (editingKey === cellKey) e.stopPropagation(); }}
                         onBlur={(e) => {
                           const cells = { ...(p.cells || {}) };
                           cells[r] = { ...(cells[r] || {}), [c]: richToRaw(e.currentTarget) };
                           updateProps(el.id, { cells });
+                          setEditingKey(null);
                         }} />
                     ) : (
                       <td key={c} style={{ textAlign: p.align || "left" }}>{renderTpl(raw, data, rowsData)}</td>

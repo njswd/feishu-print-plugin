@@ -387,7 +387,7 @@ function renderElContent(el, data, rows, edit){
     case "free":
     case "article":
     case "attach":
-      if(edit) return '<div class="content editable" style="'+style+'" contenteditable="true">' + richEditHTML(p.content || "双击编辑文本") + "</div>";
+      if(edit) return '<div class="content editable" style="'+style+'">' + richEditHTML(p.content || "双击编辑文本") + "</div>";
       return '<div class="content" style="'+style+'">' + esc(renderTpl(p.content || "", data, rows)) + "</div>";
     case "line":
       return '<div class="content el-line"></div>';
@@ -407,7 +407,7 @@ function renderElContent(el, data, rows, edit){
         for(var c=0;c<cols;c++){
           var cell = (p.cells && p.cells[r] && p.cells[r][c]) || "";
           var cellHtml = edit ? richEditHTML(cell) : esc(renderTpl(cell, data, rows));
-          html += '<td style="text-align:'+(p.align||"left")+'"'+(edit?' contenteditable="true"':'')+'>'+cellHtml+"</td>";
+          html += '<td style="text-align:'+(p.align||"left")+'">'+cellHtml+"</td>";
         }
         html += "</tr>";
       }
@@ -793,25 +793,41 @@ function renderContent(){
     paper.appendChild(div);
 
     if(TEXT_LIKE.indexOf(el.type) >= 0){
-      var ce = div.querySelector("[contenteditable]");
+      var ce = div.querySelector(".content");
       if(ce){
-        ce.addEventListener("dblclick", function(ev){ ev.stopPropagation(); ce.focus(); });
+        /* 双击进入编辑；单击不拦截冒泡，保证可选中/可拖动 */
+        ce.addEventListener("dblclick", function(ev){
+          ev.stopPropagation();
+          ce.contentEditable = "true";
+          ce.focus();
+        });
+        ce.addEventListener("mousedown", function(ev){
+          if(ce.contentEditable === "true" || ce === document.activeElement) ev.stopPropagation();
+        });
         ce.addEventListener("blur", function(){
           var raw = richToRaw(ce);
-          if(raw !== el.props.content){ el.props.content = raw; commit(); }
+          ce.contentEditable = "false";
+          if(raw !== el.props.content){ el.props.content = raw; commit(); renderProps(); }
           saveState();
         });
-        ce.addEventListener("mousedown", function(ev){ ev.stopPropagation(); });
       }
     }
     if(el.type === "table"){
       div.querySelectorAll(".el-table td").forEach(function(td, idx){
-        td.addEventListener("mousedown", function(ev){ ev.stopPropagation(); });
+        td.addEventListener("dblclick", function(ev){
+          ev.stopPropagation();
+          td.contentEditable = "true";
+          td.focus();
+        });
+        td.addEventListener("mousedown", function(ev){
+          if(td.contentEditable === "true" || td === document.activeElement) ev.stopPropagation();
+        });
         td.addEventListener("blur", function(){
           var rows = el.props.rows||3, cols = el.props.cols||3;
           var r = Math.floor(idx/cols), cc = idx%cols;
           var old = (el.props.cells && el.props.cells[r] && el.props.cells[r][cc]) || "";
           var raw = richToRaw(td);
+          td.contentEditable = "false";
           if(raw !== old){
             el.props.cells = el.props.cells||{};
             el.props.cells[r] = el.props.cells[r]||{};
@@ -840,6 +856,7 @@ function bindElDrag(div, el){
     ev.stopPropagation();
     document.querySelectorAll(".el.selected").forEach(function(n){ n.classList.remove("selected"); });
     div.classList.add("selected");
+    buildFloatBar();
     renderProps();
     var startX = ev.clientX, startY = ev.clientY, ox = el.x, oy = el.y;
     function onMove(e){
@@ -965,8 +982,8 @@ function alignSel(el, dir){
 }
 function fbEdit(el){
   if(TEXT_LIKE.indexOf(el.type) >= 0){
-    var ce = document.querySelector('.el[data-id="'+el.id+'"] [contenteditable]');
-    if(ce) ce.focus();
+    var ce = document.querySelector('.el[data-id="'+el.id+'"] .content');
+    if(ce){ ce.contentEditable = "true"; ce.focus(); }
   }else{
     $("posPop").classList.add("show"); $("alignPop").classList.remove("show");
   }
