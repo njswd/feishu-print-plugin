@@ -242,6 +242,17 @@
   .modal .clear{background:var(--card); color:var(--ink);}
   .modal .ok{background:var(--blue); color:#fff; font-weight:600;}
 
+  /* ===== v1.1 输入【快速插入字段：光标处字段选择浮层 ===== */
+  .field-picker{position:absolute; z-index:400; width:238px; max-height:218px; overflow:auto; background:#fff; border:1px solid #e5e6eb; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.14); padding:4px;}
+  .fp-head{padding:5px 8px 4px; font-size:11px; color:#86909c;}
+  .fp-item{display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; font-size:12px; border-radius:6px; color:#1d2129;}
+  .fp-item:hover, .fp-item.active{background:#f2f3f5;}
+  .fp-ic{width:18px; text-align:center; color:#3370ff; font-style:normal; flex:none;}
+  .fp-item b{font-weight:500; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .fp-item i{font-style:normal; color:#86909c; font-size:11px; flex:none;}
+  /* 编辑态空内容占位符（对齐官方文案） */
+  .content.editable:empty:before{content:"在这里输入文字，输入【快速插入字段"; color:#b8bfc7; pointer-events:none;}
+
   /* ===== 打印 ===== */
   #printArea{display:none;}
   @media print{
@@ -254,7 +265,7 @@
     .paper-label{display:none;}
     .el{outline:none !important;}
     .resize-handle{display:none !important;}
-    .float-bar, .drag-handle, .chip-pop{display:none !important;}
+    .float-bar, .drag-handle, .chip-pop, .field-picker{display:none !important;}
     @page{margin:0;}
   }
 </style>
@@ -513,7 +524,7 @@ function renderElContent(el, data, rows, edit){
     case "free":
     case "article":
     case "attach":
-      if(edit) return '<div class="content editable" style="'+style+'">' + richEditHTML(p.content || "双击编辑文本") + "</div>";
+      if(edit) return '<div class="content editable" style="'+style+'">' + richEditHTML(p.content || "") + "</div>";
       return '<div class="content" style="'+style+'">' + renderTplHtml(p.content || "", data, rows) + "</div>";
     case "line":
       return '<div class="content el-line"></div>';
@@ -1107,6 +1118,7 @@ function exportHtml(){
  * ===================================================================== */
 function renderContent(){
   removeChipPop();
+  fpClose();
   var c = $("content");
   if(state.view === "preview"){
     c.innerHTML = '<div id="previewArea"></div>';
@@ -1147,7 +1159,10 @@ function renderContent(){
         ce.addEventListener("mousedown", function(ev){
           if(ce.contentEditable === "true" || ce === document.activeElement) ev.stopPropagation();
         });
+        ce.addEventListener("input", function(){ fpCheck(ce, el, "content"); });          /* v1.1 输入【快速插入字段 */
+        ce.addEventListener("keydown", fpKeydown);                                        /* v1.1 浮层键盘导航 */
         ce.addEventListener("blur", function(){
+          fpClose();
           var raw = richToRaw(ce);
           ce.contentEditable = "false";
           if(raw !== el.props.content){ el.props.content = raw; commit(); renderProps(); }
@@ -1165,7 +1180,10 @@ function renderContent(){
         td.addEventListener("mousedown", function(ev){
           if(td.contentEditable === "true" || td === document.activeElement) ev.stopPropagation();
         });
+        td.addEventListener("input", function(){ fpCheck(td, el, "cell", Math.floor(idx/cols), idx%cols); }); /* v1.1 输入【快速插入字段 */
+        td.addEventListener("keydown", fpKeydown);                                                            /* v1.1 浮层键盘导航 */
         td.addEventListener("blur", function(){
+          fpClose();
           var rows = el.props.rows||3, cols = el.props.cols||3;
           var r = Math.floor(idx/cols), cc = idx%cols;
           var old = (el.props.cells && el.props.cells[r] && el.props.cells[r][cc]) || "";
@@ -1364,7 +1382,7 @@ document.addEventListener("drop", function(e){
   var innerH = (rect.height - parseFloat(cs.paddingTop)*2)/MM;
   var defPx = Math.round((state.appSet.fontPt || 10) * 96 / 72); /* v1.0 pt → px */
   var defaults = {
-    text:{ w:60,h:10,props:{content:"双击编辑文本",fontSize:defPx,bold:false,align:"left"} },
+    text:{ w:60,h:10,props:{content:"",fontSize:defPx,bold:false,align:"left"} },
     line:{ w:80,h:2,props:{} },
     table:{ w:80,h:30,props:{rows:3,cols:3,cells:{}} },
     autotable:{ w:180,h:60,props:{} },
@@ -1626,6 +1644,145 @@ function deleteChip(){
     if(kind === "content") el.props.content = v; else el.props.cells[r][c] = v;
   });
   commit(); renderContent(); saveState();
+}
+
+/* =====================================================================
+ * v1.1 输入【快速插入字段（对齐官方：编辑文本/单元格时敲 [ 或 【，
+ *      光标处弹出字段选择浮层，选中后【+过滤词整体替换为字段 chip）
+ * ===================================================================== */
+var fpCtx = null;  /* {host, el, kind, r, c, filter, active} */
+var fpBox = null;  /* 浮层 DOM */
+
+function fpClose(){ if(fpBox){ fpBox.remove(); fpBox = null; } fpCtx = null; }
+
+/* 光标前未闭合的【触发符 → 返回过滤词（无触发返回 null） */
+function fpMatchBefore(host){
+  var sel = window.getSelection();
+  if(!sel.rangeCount || !sel.isCollapsed || !host.contains(sel.getRangeAt(0).startContainer)) return null;
+  var r = sel.getRangeAt(0);
+  var pre = r.cloneRange();
+  pre.selectNodeContents(host);
+  pre.setEnd(r.startContainer, r.startOffset);
+  var m = pre.toString().match(/[\[【]([^\]】]*)$/);
+  return m ? m[1] : null;
+}
+
+/* 纯文本偏移 → DOM 位置（host 内第 target 个字符所在的节点/偏移） */
+function fpTextPos(host, target){
+  var w = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, null);
+  var n, acc = 0;
+  while((n = w.nextNode())){
+    if(acc + n.nodeValue.length >= target) return { node:n, offset:target-acc };
+    acc += n.nodeValue.length;
+  }
+  return null;
+}
+
+/* input 时检测：host=编辑容器 el=元素 kind=content|cell r/c=单元格行列 */
+function fpCheck(host, el, kind, r, c){
+  var f = fpMatchBefore(host);
+  if(f === null || f.indexOf("]") >= 0 || f.indexOf("】") >= 0){ fpClose(); return; }
+  if(!fpCtx || fpCtx.host !== host){
+    fpCtx = { host:host, el:el, kind:kind, r:r, c:c, filter:f, active:0 };
+  } else {
+    fpCtx.el = el; fpCtx.kind = kind; fpCtx.r = r; fpCtx.c = c;
+    if(fpCtx.filter !== f){ fpCtx.filter = f; fpCtx.active = 0; }
+  }
+  fpShow();
+}
+
+function fpShow(){
+  if(!fpCtx) return;
+  var list = FIELDS.filter(function(f){ return !fpCtx.filter || f.toLowerCase().indexOf(fpCtx.filter.toLowerCase()) >= 0; });
+  if(fpCtx.active >= list.length) fpCtx.active = 0;
+  if(!fpBox){
+    fpBox = document.createElement("div");
+    fpBox.className = "field-picker";
+    fpBox.addEventListener("mousedown", function(ev){ ev.preventDefault(); }); /* 防抢焦点导致编辑器 blur */
+    fpBox.addEventListener("click", function(ev){
+      ev.stopPropagation();
+      var it = ev.target.closest(".fp-item");
+      if(it && it.dataset.f) fpPick(it.dataset.f);
+    });
+    document.body.appendChild(fpBox);
+  }
+  var sel = window.getSelection();
+  var rect = sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+  if(!rect || (!rect.width && !rect.height)) rect = fpCtx.host.getBoundingClientRect();
+  var maxLeft = window.scrollX + document.documentElement.clientWidth - 246;
+  fpBox.style.left = Math.max(4, Math.min(rect.left + window.scrollX, maxLeft)) + "px";
+  fpBox.style.top = (rect.bottom + window.scrollY + 6) + "px";
+  fpBox.innerHTML = '<div class="fp-head">选择字段' + (fpCtx.filter ? ' · "' + esc(fpCtx.filter) + '"' : '') + '</div>' +
+    (list.length ? list.map(function(f, i){
+      var m = fieldMeta(f);
+      return '<div class="fp-item'+(i===fpCtx.active?' active':'')+'" data-f="'+esc(f)+'">' +
+        '<span class="fp-ic">'+m.ic+'</span><b>'+esc(f)+'</b><i>'+m.type+'</i></div>';
+    }).join("") : '<div class="fp-item" style="cursor:default;color:#86909c"><span class="fp-ic">∅</span><b>无匹配字段，Esc 关闭</b></div>');
+}
+
+/* 选中字段：从触发符到光标整体删除，原位插入 chip，光标落在 chip 后 */
+function fpPick(name){
+  if(!fpCtx) return;
+  var host = fpCtx.host, el = fpCtx.el, kind = fpCtx.kind, r = fpCtx.r, c = fpCtx.c;
+  var sel = window.getSelection();
+  if(!sel.rangeCount){ fpClose(); return; }
+  var cr = sel.getRangeAt(0);
+  if(!host.contains(cr.startContainer)){ fpClose(); return; }
+  var pre = cr.cloneRange();
+  pre.selectNodeContents(host);
+  pre.setEnd(cr.startContainer, cr.startOffset);
+  var txt = pre.toString();
+  var idx = Math.max(txt.lastIndexOf("["), txt.lastIndexOf("【"));
+  if(idx < 0){ fpClose(); return; }
+  var start = fpTextPos(host, idx);
+  fpClose();
+  if(!start) return;
+  var del = document.createRange();
+  del.setStart(start.node, start.offset);
+  del.setEnd(cr.startContainer, cr.startOffset);
+  del.deleteContents();
+  var chip = document.createElement("span");
+  chip.className = "fld-chip chip-ok";
+  chip.setAttribute("data-raw", name);
+  chip.setAttribute("contenteditable", "false");
+  chip.innerHTML = esc(chipLabel(name)) + ' <i class="chip-caret">⌄</i>';
+  del.insertNode(chip);
+  var anchor = document.createTextNode("");
+  if(chip.after) chip.after(anchor); else chip.parentNode.insertBefore(anchor, chip.nextSibling);
+  host.focus();
+  var r2 = document.createRange();
+  r2.setStart(anchor, 0); r2.collapse(true);
+  sel.removeAllRanges(); sel.addRange(r2);
+  /* 立即落库（commit 不重渲染，光标保留；blur 时不重复保存） */
+  var raw = richToRaw(host);
+  if(kind === "content"){
+    if(raw !== el.props.content){ el.props.content = raw; }
+  } else {
+    el.props.cells = el.props.cells || {};
+    el.props.cells[r] = el.props.cells[r] || {};
+    el.props.cells[r][c] = raw;
+  }
+  commit(); saveState();
+}
+
+/* 浮层打开时的键盘导航：↑↓ 选择 / Enter·Tab 确认 / Esc 关闭 */
+function fpKeydown(ev){
+  if(!fpBox || !fpCtx) return;
+  if(ev.key === "ArrowDown" || ev.key === "ArrowUp"){
+    ev.preventDefault();
+    var items = fpBox.querySelectorAll(".fp-item[data-f]");
+    if(!items.length) return;
+    fpCtx.active = (fpCtx.active + (ev.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+    items.forEach(function(n, i){ n.classList.toggle("active", i === fpCtx.active); });
+    var cur = items[fpCtx.active];
+    if(cur && cur.scrollIntoView) cur.scrollIntoView({ block:"nearest" });
+  } else if(ev.key === "Enter" || ev.key === "Tab"){
+    var it = fpBox.querySelector(".fp-item.active[data-f]") || fpBox.querySelector(".fp-item[data-f]");
+    if(it){ ev.preventDefault(); fpPick(it.dataset.f); }
+  } else if(ev.key === "Escape"){
+    ev.preventDefault();
+    fpClose();
+  }
 }
 
 /* =====================================================================

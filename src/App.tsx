@@ -50,7 +50,7 @@ const COMPONENTS: { type: ElType; icon: string; label: string }[] = [
 ];
 
 const DEFAULTS: Record<ElType, { w: number; h: number; props: ElProps }> = {
-  text: { w: 60, h: 10, props: { content: "双击编辑文本", fontSize: 14, bold: false, align: "left" } },
+  text: { w: 60, h: 10, props: { content: "", fontSize: 14, bold: false, align: "left" } },
   line: { w: 80, h: 2, props: {} },
   table: { w: 80, h: 30, props: { rows: 3, cols: 3, cells: {} } },
   autotable: { w: 180, h: 60, props: {} },
@@ -218,6 +218,35 @@ function richToRaw(node: HTMLElement): string {
   return out;
 }
 
+/* ---------- v1.1 输入【快速插入字段（对齐官方：编辑文本/单元格时敲 [ 或 【 弹出字段选择）---------- */
+/** 光标前未闭合的【触发符 → 返回过滤词（无触发返回 null） */
+function fpMatchBefore(host: HTMLElement): string | null {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !sel.isCollapsed || !host.contains(sel.getRangeAt(0).startContainer)) return null;
+  const r = sel.getRangeAt(0);
+  const pre = r.cloneRange();
+  pre.selectNodeContents(host);
+  pre.setEnd(r.startContainer, r.startOffset);
+  const m = pre.toString().match(/[\[【]([^\]】]*)$/);
+  return m ? m[1] : null;
+}
+/** 纯文本偏移 → host 内 DOM 位置 */
+function fpTextPos(host: HTMLElement, target: number): { node: Text; offset: number } | null {
+  const w = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+  let n: Node | null = w.nextNode();
+  let acc = 0;
+  while (n) {
+    const t = n as Text;
+    const len = t.nodeValue ? t.nodeValue.length : 0;
+    if (acc + len >= target) return { node: t, offset: target - acc };
+    acc += len;
+    n = w.nextNode();
+  }
+  return null;
+}
+/** v1.1 字段选择浮层状态（host 不参与渲染，仅用于选中后定位 DOM 区间） */
+type FpState = { host: HTMLElement; elId: string; kind: "content" | "cell"; r: number; c: number; filter: string; x: number; y: number; active: number };
+
 function cellToText(v: unknown): string {
   if (v === undefined || v === null) return "";
   if (typeof v === "string" || typeof v === "number") return String(v);
@@ -299,6 +328,7 @@ export default function App() {
   const [dsTab, setDsTab] = useState<"field" | "sys">("field");
   const [dsSearch, setDsSearch] = useState("");
   const [loopOpen, setLoopOpen] = useState(false);
+  const [fp, setFp] = useState<FpState | null>(null); // v1.1 输入【快速插入字段：光标处字段选择浮层
 
   const editorRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -334,6 +364,74 @@ export default function App() {
     let max = 0;
     templates.forEach((t) => t.elements.forEach((e) => { const n = parseInt(e.id.slice(1)); if (n > max) max = n; }));
     return "e" + Math.max(max + 1, idRef.current++);
+  }
+
+  /* ---------- v1.1 输入【快速插入字段 ---------- */
+  function fpCheckEl(host: HTMLElement, el: LayoutEl, kind: "content" | "cell", r = 0, c = 0) {
+    const f = fpMatchBefore(host);
+    if (f === null || f.includes("]") || f.includes("】")) { setFp(null); return; }
+    const sel = window.getSelection();
+    const rect = sel && sel.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
+    const box = rect && (rect.width || rect.height) ? rect : host.getBoundingClientRect();
+    setFp((prev) => ({
+      host, elId: el.id, kind, r, c, filter: f,
+      x: Math.max(4, Math.min(box.left, window.innerWidth - 246)),
+      y: box.bottom + 6,
+      active: prev && prev.host === host && prev.filter === f ? prev.active : 0,
+    }));
+  }
+  function fpKeyEl(e: React.KeyboardEvent) {
+    if (!fp) return;
+    const items = fieldNames.filter((f) => !fp.filter || f.toLowerCase().includes(fp.filter.toLowerCase()));
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!items.length) return;
+      const next = (fp.active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+      setFp({ ...fp, active: next });
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      const it = items[fp.active] || items[0];
+      if (it) { e.preventDefault(); fpPickField(it); }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setFp(null);
+    }
+  }
+  /** 选中字段：从触发符到光标整体删除，原位插入 chip；保存交给 onBlur 的 richToRaw（避免重渲染丢光标） */
+  function fpPickField(name: string) {
+    if (!fp) return;
+    const host = fp.host;
+    const sel = window.getSelection();
+    setFp(null);
+    if (!sel || !sel.rangeCount) return;
+    const cr = sel.getRangeAt(0);
+    if (!host.contains(cr.startContainer)) return;
+    const pre = cr.cloneRange();
+    pre.selectNodeContents(host);
+    pre.setEnd(cr.startContainer, cr.startOffset);
+    const txt = pre.toString();
+    const idx = Math.max(txt.lastIndexOf("["), txt.lastIndexOf("【"));
+    if (idx < 0) return;
+    const start = fpTextPos(host, idx);
+    if (!start) return;
+    const del = document.createRange();
+    del.setStart(start.node, start.offset);
+    del.setEnd(cr.startContainer, cr.startOffset);
+    del.deleteContents();
+    const chip = document.createElement("span");
+    chip.className = "fld-chip chip-ok";
+    chip.setAttribute("data-raw", name);
+    chip.setAttribute("contenteditable", "false");
+    chip.innerHTML = esc(chipLabel(name)) + ' <i class="chip-caret">⌄</i>';
+    del.insertNode(chip);
+    const anchor = document.createTextNode("");
+    if (chip.after) chip.after(anchor);
+    else chip.parentNode!.insertBefore(anchor, chip.nextSibling);
+    host.focus();
+    const r2 = document.createRange();
+    r2.setStart(anchor, 0);
+    r2.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r2);
   }
 
   /* ---------- 撤销 / 重做 / 清空（v0.6）---------- */
@@ -631,7 +729,7 @@ export default function App() {
           const editing = editingKey === el.id;
           return (
             <div className="content editable" style={style} contentEditable={editing} suppressContentEditableWarning
-              dangerouslySetInnerHTML={{ __html: richEditHTML(p.content || "双击编辑文本", fieldNames) }}
+              dangerouslySetInnerHTML={{ __html: richEditHTML(p.content || "", fieldNames) }}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 setEditingKey(el.id);
@@ -640,11 +738,13 @@ export default function App() {
                 }, 0);
               }}
               onMouseDown={(e) => { if (editing || (e.target as HTMLElement).closest(".fld-chip")) e.stopPropagation(); }}
+              onInput={(e) => fpCheckEl(e.currentTarget, el, "content")}
+              onKeyDown={fpKeyEl}
               onClick={(e) => {
                 const chip = (e.target as HTMLElement).closest(".fld-chip") as HTMLElement | null;
                 if (chip) { e.stopPropagation(); handleChipClick(chip, el.id); }
               }}
-              onBlur={(e) => { updateProps(el.id, { content: richToRaw(e.currentTarget) }); setEditingKey(null); }} />
+              onBlur={(e) => { setFp(null); updateProps(el.id, { content: richToRaw(e.currentTarget) }); setEditingKey(null); }} />
           );
         }
         return <div className="content" style={style} dangerouslySetInnerHTML={{ __html: renderTplHtml(p.content || "", data, rowsData, fieldNames) }} />;
@@ -684,11 +784,14 @@ export default function App() {
                           }, 0);
                         }}
                         onMouseDown={(e) => { if (editingKey === cellKey || (e.target as HTMLElement).closest(".fld-chip")) e.stopPropagation(); }}
+                        onInput={(e) => fpCheckEl(e.currentTarget, el, "cell", r, c)}
+                        onKeyDown={fpKeyEl}
                         onClick={(e) => {
                           const chip = (e.target as HTMLElement).closest(".fld-chip") as HTMLElement | null;
                           if (chip) { e.stopPropagation(); handleChipClick(chip, el.id); }
                         }}
                         onBlur={(e) => {
+                          setFp(null);
                           const cells = { ...(p.cells || {}) };
                           cells[r] = { ...(cells[r] || {}), [c]: richToRaw(e.currentTarget) };
                           updateProps(el.id, { cells });
@@ -1302,6 +1405,31 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   <div className="resize-handle" onMouseDown={(e) => startDrag(e, el, "resize")} />
                 </div>
               ))}
+              {/* v1.1 输入【快速插入字段：光标处字段选择浮层 */}
+              {fp && (
+                <div className="field-picker"
+                  style={{ position: "fixed", left: fp.x, top: fp.y }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const it = (e.target as HTMLElement).closest(".fp-item") as HTMLElement | null;
+                    if (it && it.dataset.f) fpPickField(it.dataset.f);
+                  }}>
+                  <div className="fp-head">选择字段{fp.filter ? ' · "' + fp.filter + '"' : ""}</div>
+                  {(() => {
+                    const items = fieldNames.filter((f) => !fp.filter || f.toLowerCase().includes(fp.filter.toLowerCase()));
+                    if (!items.length) return <div className="fp-item" style={{ cursor: "default", color: "#86909c" }}><span className="fp-ic">∅</span><b>无匹配字段，Esc 关闭</b></div>;
+                    return items.map((f, i) => {
+                      const m = fieldMeta(f, records[0]?.data);
+                      return (
+                        <div key={f} className={"fp-item" + (i === Math.min(fp.active, items.length - 1) ? " active" : "")} data-f={f}>
+                          <span className="fp-ic">{m.ic}</span><b>{f}</b><i>{m.type}</i>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
               {selected && (
                 <div className="float-bar"
                   style={{ left: selected.x + "mm", top: (selected.y > 12 ? selected.y - 9 : selected.y + selected.h + 2) + "mm" }}

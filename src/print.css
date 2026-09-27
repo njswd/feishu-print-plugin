@@ -430,6 +430,17 @@
 }
 .modal-row { display: flex; gap: 10px; margin-top: 12px; justify-content: flex-end; }
 
+/* ---------- v1.1 输入【快速插入字段：光标处字段选择浮层 ---------- */
+.field-picker { position: fixed; z-index: 400; width: 238px; max-height: 218px; overflow: auto; background: #fff; border: 1px solid #e5e6eb; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .14); padding: 4px; }
+.fp-head { padding: 5px 8px 4px; font-size: 11px; color: #86909c; }
+.fp-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; font-size: 12px; border-radius: 6px; color: #1d2129; }
+.fp-item:hover, .fp-item.active { background: #f2f3f5; }
+.fp-ic { width: 18px; text-align: center; color: #3370ff; font-style: normal; flex: none; }
+.fp-item b { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-item i { font-style: normal; color: #86909c; font-size: 11px; flex: none; }
+/* 编辑态空内容占位符（对齐官方文案） */
+.content.editable:empty:before { content: "在这里输入文字，输入【快速插入字段"; color: #b8bfc7; pointer-events: none; }
+
 /* ---------- 打印 ----------
    新版直接 window.print()：隐藏侧栏/顶栏/数据表切换条，
    仅让 .content 里的纸张可见并平铺到页面左上角 */
@@ -449,6 +460,6 @@
   .el { outline: none !important; }
   .el .content[contenteditable] { outline: none; }
   .resize-handle { display: none !important; }
-  .float-bar, .drag-handle, .chip-pop { display: none !important; }
+  .float-bar, .drag-handle, .chip-pop, .field-picker { display: none !important; }
   @page { margin: 0; }
 }
