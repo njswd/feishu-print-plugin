@@ -139,6 +139,9 @@
   .cp-btn{border:none; background:rgba(255,255,255,.14); color:#fff; font-size:11.5px; padding:3px 8px; border-radius:5px; cursor:pointer;}
   .cp-btn:hover{background:rgba(255,255,255,.28);}
   .fld-chip{cursor:pointer;}
+  /* v0.9 字段 chip 数据关联状态：蓝=可取数，红=取不到 */
+  .fld-chip.chip-ok{border-color:#3370ff; color:#3370ff; background:#f0f6ff;}
+  .fld-chip.chip-bad{border-color:#f0473f; color:#f0473f; background:#fff7f6;}
   .field-modal{width:420px; padding:0; overflow:hidden;}
   .fm-head{display:flex; align-items:center; justify-content:center; position:relative; padding:14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);}
   .fm-close{position:absolute; right:12px; top:11px; border:none; background:none; font-size:14px; cursor:pointer; color:var(--sub);}
@@ -386,14 +389,37 @@ function renderTpl(tpl, data, rows){
     return (v === undefined || v === null) ? "" : String(v);
   });
 }
-/* 编辑态：把 {{字段}} 渲染为红色 chip */
+/* 编辑态：把 {{字段}} 渲染为 chip（v0.9：能取到数据=蓝色，取不到=红色） */
 function chipLabel(f){
   var m = f.match(/^SUM\((.+)\)$/);
   return m ? "求和 · " + m[1].trim() : f;
 }
+/* v0.9 判断字段是否与数据表关联（SUM(字段) 剥壳后检查） */
+function fieldExists(f){
+  var m = f.match(/^SUM\((.+)\)$/);
+  var name = (m ? m[1] : f).trim();
+  return FIELDS.indexOf(name) >= 0;
+}
 function richEditHTML(raw){
   return esc(raw || "").replace(/\{\{(.*?)\}\}/g, function(_, f){
-    return '<span class="fld-chip" data-raw="'+esc(f)+'">'+esc(chipLabel(f))+' <i class="chip-caret">⌄</i></span>';
+    var cls = fieldExists(f) ? "fld-chip chip-ok" : "fld-chip chip-bad";
+    return '<span class="'+cls+'" data-raw="'+esc(f)+'"'+(fieldExists(f) ? '' : ' title="未找到字段"')+'>'+esc(chipLabel(f))+' <i class="chip-caret">⌄</i></span>';
+  });
+}
+/* v0.9 预览态渲染：未知字段显示红色 chip，已知字段取值/求和（内部已转义） */
+function renderTplHtml(tpl, data, rows){
+  return esc(String(tpl || "")).replace(/\{\{(.*?)\}\}/g, function(_, f){
+    if(!fieldExists(f)) return '<span class="fld-chip chip-bad" title="未找到字段">' + esc(chipLabel(f)) + '</span>';
+    var m = f.match(/^SUM\((.+)\)$/);
+    if(m){
+      var name = m[1].trim();
+      var list = rows && rows.length ? rows : (data ? [data] : []);
+      var sum = 0;
+      list.forEach(function(r){ var n = parseFloat(r[name]); if(!isNaN(n)) sum += n; });
+      return esc(String(Math.round(sum * 100) / 100));
+    }
+    var v = data ? data[f.trim()] : undefined;
+    return (v === undefined || v === null) ? "" : esc(String(v));
   });
 }
 /* 退出编辑时把 DOM 还原为原始文本（chip → {{字段}}） */
@@ -420,7 +446,7 @@ function renderElContent(el, data, rows, edit){
     case "article":
     case "attach":
       if(edit) return '<div class="content editable" style="'+style+'">' + richEditHTML(p.content || "双击编辑文本") + "</div>";
-      return '<div class="content" style="'+style+'">' + esc(renderTpl(p.content || "", data, rows)) + "</div>";
+      return '<div class="content" style="'+style+'">' + renderTplHtml(p.content || "", data, rows) + "</div>";
     case "line":
       return '<div class="content el-line"></div>';
     case "image":
@@ -438,7 +464,7 @@ function renderElContent(el, data, rows, edit){
         html += "<tr>";
         for(var c=0;c<cols;c++){
           var cell = (p.cells && p.cells[r] && p.cells[r][c]) || "";
-          var cellHtml = edit ? richEditHTML(cell) : esc(renderTpl(cell, data, rows));
+          var cellHtml = edit ? richEditHTML(cell) : renderTplHtml(cell, data, rows);
           html += '<td style="text-align:'+(p.align||"left")+'">'+cellHtml+"</td>";
         }
         html += "</tr>";

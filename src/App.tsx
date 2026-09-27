@@ -142,15 +142,40 @@ function renderTpl(tpl: string, data: Record<string, string> | null, rowsData?: 
   });
 }
 
-/* ---------- 编辑态字段 chip（对齐官方红色 chip）---------- */
+/* ---------- 编辑态字段 chip（v0.9：能取到数据=蓝色，取不到=红色）---------- */
 function chipLabel(f: string): string {
   const m = f.match(/^SUM\((.+)\)$/);
   return m ? "求和 · " + m[1].trim() : f;
 }
-function richEditHTML(raw: string | undefined): string {
-  return esc(raw || "").replace(/\{\{(.*?)\}\}/g, (_, f: string) =>
-    '<span class="fld-chip" data-raw="' + esc(f) + '">' + esc(chipLabel(f)) + ' <i class="chip-caret">⌄</i></span>'
-  );
+/** v0.9 判断字段是否与数据表关联（SUM(字段) 剥壳后检查） */
+function fieldExists(f: string, names: string[]): boolean {
+  const m = f.match(/^SUM\((.+)\)$/);
+  const name = (m ? m[1] : f).trim();
+  return names.includes(name);
+}
+function chipHtml(f: string, names: string[], withCaret: boolean): string {
+  const ok = fieldExists(f, names);
+  return '<span class="' + (ok ? "fld-chip chip-ok" : "fld-chip chip-bad") + '" data-raw="' + esc(f) + '"'
+    + (ok ? "" : ' title="未找到字段"') + '>' + esc(chipLabel(f)) + (withCaret ? ' <i class="chip-caret">⌄</i>' : "") + '</span>';
+}
+function richEditHTML(raw: string | undefined, names: string[]): string {
+  return esc(raw || "").replace(/\{\{(.*?)\}\}/g, (_, f: string) => chipHtml(f, names, true));
+}
+/** v0.9 预览态渲染：未知字段显示红色 chip，已知字段取值/求和（内部已转义） */
+function renderTplHtml(tpl: string, data: Record<string, string> | null, rowsData: Record<string, string>[] | undefined, names: string[]): string {
+  return esc(String(tpl || "")).replace(/\{\{(.*?)\}\}/g, (_, f: string) => {
+    if (!fieldExists(f, names)) return chipHtml(f, names, false);
+    const m = f.match(/^SUM\((.+)\)$/);
+    if (m) {
+      const name = m[1].trim();
+      const list = rowsData && rowsData.length ? rowsData : data ? [data] : [];
+      let sum = 0;
+      list.forEach((r) => { const n = parseFloat(r[name]); if (!isNaN(n)) sum += n; });
+      return esc(String(Math.round(sum * 100) / 100));
+    }
+    const v = data ? data[f.trim()] : undefined;
+    return v === undefined || v === null ? "" : esc(String(v));
+  });
 }
 /** 把编辑中的 DOM 还原为原始文本（chip → {{字段}}） */
 function richToRaw(node: HTMLElement): string {
@@ -558,7 +583,7 @@ export default function App() {
           const editing = editingKey === el.id;
           return (
             <div className="content editable" style={style} contentEditable={editing} suppressContentEditableWarning
-              dangerouslySetInnerHTML={{ __html: richEditHTML(p.content || "双击编辑文本") }}
+              dangerouslySetInnerHTML={{ __html: richEditHTML(p.content || "双击编辑文本", fieldNames) }}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 setEditingKey(el.id);
@@ -574,7 +599,7 @@ export default function App() {
               onBlur={(e) => { updateProps(el.id, { content: richToRaw(e.currentTarget) }); setEditingKey(null); }} />
           );
         }
-        return <div className="content" style={style}>{renderTpl(p.content || "", data, rowsData)}</div>;
+        return <div className="content" style={style} dangerouslySetInnerHTML={{ __html: renderTplHtml(p.content || "", data, rowsData, fieldNames) }} />;
       case "line":
         return <div className="content el-line" />;
       case "image":
@@ -602,7 +627,7 @@ export default function App() {
                     return edit ? (
                       <td key={c} data-cell={r + "-" + c} style={{ textAlign: p.align || "left" }}
                         contentEditable={editingKey === cellKey} suppressContentEditableWarning
-                        dangerouslySetInnerHTML={{ __html: richEditHTML(raw) }}
+                        dangerouslySetInnerHTML={{ __html: richEditHTML(raw, fieldNames) }}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           setEditingKey(cellKey);
@@ -622,7 +647,7 @@ export default function App() {
                           setEditingKey(null);
                         }} />
                     ) : (
-                      <td key={c} style={{ textAlign: p.align || "left" }}>{renderTpl(raw, data, rowsData)}</td>
+                      <td key={c} style={{ textAlign: p.align || "left" }} dangerouslySetInnerHTML={{ __html: renderTplHtml(raw, data, rowsData, fieldNames) }} />
                     );
                   })}
                 </tr>

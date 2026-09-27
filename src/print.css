@@ -158,6 +158,9 @@
 }
 .cp-btn:hover { background: rgba(255, 255, 255, .28); }
 .fld-chip { cursor: pointer; }
+/* v0.9 字段 chip 数据关联状态：蓝=可取数，红=取不到 */
+.fld-chip.chip-ok { border-color: #3370ff; color: #3370ff; background: #f0f6ff; }
+.fld-chip.chip-bad { border-color: #f0473f; color: #f0473f; background: #fff7f6; }
 .field-modal { width: 420px; padding: 0; overflow: hidden; }
 .fm-head {
   display: flex; align-items: center; justify-content: center; position: relative;
