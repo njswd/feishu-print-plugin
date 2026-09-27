@@ -178,56 +178,42 @@ function fieldMeta(f: string, rec?: Record<string, string>): { ic: string; type:
 function autoFieldsOf(el: LayoutEl, autoFields: string[]): string[] {
   return el.props.fields ? el.props.fields : autoFields;
 }
-/* ---------- v1.5 自动排版：重叠检测 + 流式重排（不允许堆叠） ---------- */
-function rectsOverlap(a: LayoutEl, b: LayoutEl): boolean {
-  return a.x < b.x + b.w - 0.5 && a.x + a.w > b.x + 0.5 &&
-         a.y < b.y + b.h - 0.5 && a.y + a.h > b.y + 0.5;
-}
-function hasOverlapEls(list: LayoutEl[]): boolean {
-  const items = list.filter((e) => e.type !== "line");
-  for (let i = 0; i < items.length; i++)
-    for (let j = i + 1; j < items.length; j++)
-      if (rectsOverlap(items[i], items[j])) return true;
+/* ---------- v1.5.3 自动排版（局部避让版）：重叠时只动被操作控件，其他控件保持原位 ---------- */
+/* v1.5 全局装箱会把右上/居中控件全拉到左边（用户实测反馈），改为"下落避让"：
+   被拖控件保持 x（wrap 模式）向下落到首个无重叠空位 = "自动换行"；
+   cols2 模式 x 吸附近侧列后下落 = "排成两列"。 */
+function overlapsAnyAt(list: LayoutEl[], x: number, y: number, w: number, h: number, skipId: string): boolean {
+  for (const e of list) {
+    if (e.id === skipId || e.type === "line") continue;
+    if (x < e.x + e.w - 0.5 && x + w > e.x + 0.5 && y < e.y + e.h - 0.5 && y + h > e.y + 0.5) return true;
+  }
   return false;
 }
-/** mode: wrap=行式装箱装不下换行；cols2=双列贪心（宽于半列的元素独占整行）；返回新数组不改原数据 */
-function reflowEls(list: LayoutEl[], mode: string, areaW: number): LayoutEl[] {
-  const gap = 3;
-  const items = list.filter((e) => e.type !== "line").sort((p, q) => p.y - q.y || p.x - q.x);
-  const pos = new Map<string, { x: number; y: number }>();
-  if (mode === "cols2") {
-    const half = (areaW - gap) / 2;
-    const colY = [0, 0];
-    items.forEach((e) => {
-      if (e.w > half + 1) {
-        const yMax = Math.max(colY[0], colY[1]);
-        pos.set(e.id, { x: 0, y: yMax });
-        colY[0] = colY[1] = yMax + e.h + gap;
-      } else {
-        const c = colY[0] <= colY[1] ? 0 : 1;
-        pos.set(e.id, { x: c ? half + gap : 0, y: colY[c] });
-        colY[c] += e.h + gap;
-      }
-    });
-  } else {
-    let curX = 0, curY = 0, rowH = 0;
-    items.forEach((e) => {
-      if (curX > 0 && curX + e.w > areaW + 0.5) { curY += rowH + gap; curX = 0; rowH = 0; }
-      pos.set(e.id, { x: curX, y: curY });
-      curX += e.w + gap;
-      rowH = Math.max(rowH, e.h);
-    });
+function evadeDropY(list: LayoutEl[], x: number, y: number, w: number, h: number, skipId: string): number {
+  let guard = 0;
+  for (;;) {
+    let maxBottom = -Infinity;
+    for (const e of list) {
+      if (e.id === skipId || e.type === "line") continue;
+      if (x < e.x + e.w - 0.5 && x + w > e.x + 0.5 && y < e.y + e.h - 0.5 && y + h > e.y + 0.5)
+        maxBottom = Math.max(maxBottom, e.y + e.h);
+    }
+    if (maxBottom === -Infinity) break;
+    y = maxBottom + 3;
+    if (++guard > 200) break;
   }
-  return list.map((e) => {
-    const p = pos.get(e.id);
-    return p ? { ...e, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : e;
-  });
+  return y;
 }
-/** v1.5.1 拖动实时预览：存在重叠时计算重排式样（纯函数不改原数组），无重叠返回 null */
-function calcGhostReflow(list: LayoutEl[], mode: string | undefined, areaW: number): LayoutEl[] | null {
+/** 重叠时的避让落位；返回 {x,y} 或 null（不重叠/off）。moveX=false 时保持 x（resize 场景） */
+function calcEvade(list: LayoutEl[], x: number, y: number, w: number, h: number, skipId: string, mode: string | undefined, moveX: boolean, areaW: number): { x: number; y: number } | null {
   if (!mode || mode === "off") return null;
-  if (!hasOverlapEls(list)) return null;
-  return reflowEls(list, mode, areaW);
+  if (!overlapsAnyAt(list, x, y, w, h, skipId)) return null;
+  let ex = x;
+  if (moveX && mode === "cols2") {
+    const half = (areaW - 3) / 2;
+    ex = (x + w / 2 < areaW / 2) ? 0 : Math.round((half + 3) * 10) / 10;
+  }
+  return { x: ex, y: evadeDropY(list, ex, y, w, h, skipId) };
 }
 /** v1.5.2 同行顶部吸附：与已放置控件水平同行（y 区间重叠）且顶部不齐时，返回吸附目标（参考 DocuGenius 排版效果） */
 function rowAlignCalc(list: LayoutEl[], dragId: string): { y: number; x1: number; x2: number } | null {
@@ -835,10 +821,11 @@ export default function App() {
     };
     if (TEXT_LIKE.includes(el.type) && el.props.fontSize) el.props.fontSize = defPx;
     mutateEls((list) => {
-      const next = [...list, el];
-      /* v1.5 拖入元素与现有元素重叠时自动重排 */
-      const mode = pgSet.layoutMode;
-      return mode && mode !== "off" && hasOverlapEls(next) ? reflowEls(next, mode, innerArea().w) : next;
+      let next = [...list, el];
+      /* v1.5.3 拖入与现有控件重叠 → 下落避让（其他控件不动） */
+      const p = calcEvade(next, el.x, el.y, el.w, el.h, el.id, pgSet.layoutMode, true, innerArea().w);
+      if (p) next = next.map((it) => (it.id === el.id ? { ...it, x: p.x, y: p.y } : it));
+      return next;
     });
     setSelectedId(el.id);
     dragType.current = null;
@@ -860,15 +847,14 @@ export default function App() {
         return { ...it, w: Math.max(3, ow + dx), h: Math.max(2, oh + dy) };
       });
       setEls(last);
-      /* v1.5.1 重叠 → 重排式样虚影；v1.5.2 同行 → 顶部吸附线 + 对齐虚影 */
-      const g = calcGhostReflow(last, pgSet.layoutMode, innerArea().w);
-      if (g) setGhost({ list: g, activeId: el.id });
+      /* v1.5.3 重叠 → 下落避让落位虚影；同行 → 顶部吸附线 */
+      const cur = last.find((it) => it.id === el.id)!;
+      const p = calcEvade(last, cur.x, cur.y, cur.w, cur.h, el.id, pgSet.layoutMode, kind === "move", innerArea().w);
+      if (p) setGhost({ list: [{ ...cur, x: p.x, y: p.y }], activeId: el.id });
       else {
         const al = rowAlignCalc(last, el.id);
-        if (al) {
-          const d = last.find((it) => it.id === el.id)!;
-          setGhost({ list: [{ ...d, y: al.y }], activeId: el.id, refLine: al });
-        } else setGhost(null);
+        if (al) setGhost({ list: [{ ...cur, y: al.y }], activeId: el.id, refLine: al });
+        else setGhost(null);
       }
     }
     function onUp() {
@@ -877,12 +863,13 @@ export default function App() {
       setGhost(null);
       if (last) {
         let next = last;
-        const mode = pgSet.layoutMode;
-        if (mode && mode !== "off" && hasOverlapEls(last)) next = reflowEls(last, mode, innerArea().w);
+        const cur = next.find((it) => it.id === el.id)!;
+        /* 重叠 → 下落避让（只动自己）；同行 → 顶部对齐吸附（对方不动） */
+        const p = calcEvade(next, cur.x, cur.y, cur.w, cur.h, el.id, pgSet.layoutMode, kind === "move", innerArea().w);
+        if (p) next = next.map((it) => (it.id === el.id ? { ...it, x: p.x, y: p.y } : it));
         else {
-          /* 同行 → 顶部对齐吸附（只动被拖控件，对方不动） */
-          const al = rowAlignCalc(last, el.id);
-          if (al) next = last.map((it) => (it.id === el.id ? { ...it, y: al.y } : it));
+          const al = rowAlignCalc(next, el.id);
+          if (al) next = next.map((it) => (it.id === el.id ? { ...it, y: al.y } : it));
         }
         setEls(next);
         commit(next);
@@ -1240,7 +1227,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                         </select></div>
                       <div />
                     </div>
-                    <div className="empty-tip" style={{ marginTop: 4 }}>拖到其他控件上方：显示重排式样（虚线框），松手自动落位；与控件水平同行：自动顶部对齐（红色吸附线）</div>
+                    <div className="empty-tip" style={{ marginTop: 4 }}>拖到其他控件上方：被拖控件自动下落到空位（虚影预览），其他控件不动；与控件水平同行：自动顶部对齐（红色吸附线）</div>
                     <div className="ps-sec">页头页尾配置</div>
                     <div className="ps-row"><span>显示页头页尾</span>
                       <label className="sw"><input type="checkbox" checked={pgSet.hfShow} onChange={(e) => setPgSet({ ...pgSet, hfShow: e.target.checked })} /><i></i></label></div>

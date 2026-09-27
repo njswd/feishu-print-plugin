@@ -884,7 +884,7 @@ function renderPanelPage(){
   /* v1.5 自动排版：控件重叠时不允许堆叠，自动换行或排成双列 */
   html += '<div class="ps-sec">自动排版</div>';
   html += '<div class="ps-grid"><div><label>堆叠处理 ⓘ</label><select id="psLayout"><option value="off">不重排</option><option value="wrap">重叠时自动换行</option><option value="cols2">重叠时排成双列</option></select></div><div></div></div>';
-  html += '<div class="empty-tip" style="margin-top:4px">拖到其他控件上方：显示重排式样（虚线框），松手自动落位；与控件水平同行：自动顶部对齐（红色吸附线）</div>';
+  html += '<div class="empty-tip" style="margin-top:4px">拖到其他控件上方：被拖控件自动下落到空位（虚影预览），其他控件不动；与控件水平同行：自动顶部对齐（红色吸附线）</div>';
   html += '<div class="ps-sec">页头页尾配置</div>';
   html += '<div class="ps-row"><span>显示页头页尾</span><label class="sw"><input type="checkbox" id="psHf"'+(g.hfShow?" checked":"")+'><i></i></label></div>';
   if(g.hfShow){
@@ -1290,9 +1290,9 @@ function bindElDrag(div, el){
       el.x = ox + (e.clientX-startX)/MM; el.y = oy + (e.clientY-startY)/MM;
       div.style.left = el.x+"mm"; div.style.top = el.y+"mm";
       moveFloatBar(el);
-      /* v1.5.1 重叠 → 实时显示重排式样；v1.5.2 同行 → 顶部吸附线 + 对齐虚影 */
-      var g = calcGhostReflow();
-      if(g) showGhost(g, el.id);
+      /* v1.5.3 重叠 → 下落避让落位虚影；同行 → 顶部吸附线 */
+      var p = calcEvade(el.x, el.y, el.w, el.h, el.id, true);
+      if(p){ showGhostAlign({ x: p.x, y: p.y, w: el.w, h: el.h }, null); }
       else{
         var al = rowAlignCalc(el.id);
         if(al) showGhostAlign({ x: el.x, y: al.y, w: el.w, h: el.h }, al);
@@ -1303,9 +1303,9 @@ function bindElDrag(div, el){
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       hideGhost();
-      var did = autoReflow(); /* 重叠 → 按预览式样落位 */
+      var did = autoEvade(el, true); /* 重叠 → 下落避让（只动自己） */
       if(!did){
-        var al = rowAlignCalc(el.id); /* 同行 → 顶部对齐吸附（只动被拖控件，对方不动） */
+        var al = rowAlignCalc(el.id); /* 同行 → 顶部对齐吸附（对方不动） */
         if(al){ el.y = al.y; did = true; }
       }
       if(did) renderContent();
@@ -1330,7 +1330,8 @@ function bindElDrag(div, el){
       function onUp(){
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
-        if(autoReflow()) renderContent(); /* v1.5 缩放后重叠自动重排 */
+        hideGhost();
+        if(autoEvade(el, false)) renderContent(); /* v1.5.3 缩放后重叠 → y 下落避让（x 不动） */
         commit(); saveState();
       }
       document.addEventListener("mousemove", onMove);
@@ -1417,71 +1418,50 @@ function innerArea(){
   return { w: (state.landscape ? s[1] : s[0]) - state.margins.l - state.margins.r, h: (state.landscape ? s[0] : s[1]) - state.margins.t - state.margins.b };
 }
 
-/* ===== v1.5 自动排版：重叠检测 + 流式重排（不允许堆叠） ===== */
-function rectsOverlap(a, b){
-  return a.x < b.x + b.w - 0.5 && a.x + a.w > b.x + 0.5 &&
-         a.y < b.y + b.h - 0.5 && a.y + a.h > b.y + 0.5;
-}
-function reflowList(){ /* 参与重排的元素（分隔线除外）；filter 产生新数组，sort 不影响原数据 */
-  return els().filter(function(e){ return e.type !== "line"; });
-}
-function hasOverlapEls(){
-  var list = reflowList();
-  for(var i = 0; i < list.length; i++)
-    for(var j = i + 1; j < list.length; j++)
-      if(rectsOverlap(list[i], list[j])) return true;
+/* ===== v1.5.3 自动排版（局部避让版）：重叠时只动被操作控件，其他控件保持原位 =====
+   v1.5 全局装箱会把右上/居中控件全拉到左边（用户实测反馈），改为"下落避让"：
+   被拖控件保持 x（wrap 模式）向下落到首个无重叠空位 = "自动换行"；
+   cols2 模式 x 吸附近侧列后下落 = "排成两列"。 */
+function overlapsAnyAt(x, y, w, h, skipId){
+  var list = els();
+  for(var i = 0; i < list.length; i++){
+    var e = list[i];
+    if(e.id === skipId || e.type === "line") continue;
+    if(x < e.x + e.w - 0.5 && x + w > e.x + 0.5 && y < e.y + e.h - 0.5 && y + h > e.y + 0.5) return true;
+  }
   return false;
 }
-function reflowEls(mode, list){
-  list = (list || reflowList()).slice().sort(function(p, q){ return p.y - q.y || p.x - q.x; }); /* slice 防御：不改动调用方数组顺序 */
-  var a = innerArea(), gap = 3;
-  if(mode === "cols2"){
-    /* 双列贪心：每次放到较矮的一列；宽于半列的元素（如宽表格）独占整行 */
-    var half = (a.w - gap) / 2, colY = [0, 0];
-    list.forEach(function(e){
-      if(e.w > half + 1){
-        var yMax = Math.max(colY[0], colY[1]);
-        e.x = 0; e.y = yMax;
-        colY[0] = yMax + e.h + gap; colY[1] = yMax + e.h + gap;
-      } else {
-        var c = colY[0] <= colY[1] ? 0 : 1;
-        e.x = c ? Math.round((half + gap) * 10) / 10 : 0;
-        e.y = colY[c];
-        colY[c] += e.h + gap;
-      }
-    });
-  } else { /* wrap：行式装箱，一行装不下自动换行 */
-    var curX = 0, curY = 0, rowH = 0;
-    list.forEach(function(e){
-      if(curX > 0 && curX + e.w > a.w + 0.5){ curY += rowH + gap; curX = 0; rowH = 0; }
-      e.x = curX; e.y = curY;
-      curX += e.w + gap;
-      rowH = Math.max(rowH, e.h);
-    });
+function evadeDropY(x, y, w, h, skipId){ /* y 向下迭代落到首个无重叠空位（y 严格递增，必收敛） */
+  var guard = 0;
+  while(guard++ < 200){
+    var maxBottom = -Infinity, list = els();
+    for(var i = 0; i < list.length; i++){
+      var e = list[i];
+      if(e.id === skipId || e.type === "line") continue;
+      if(x < e.x + e.w - 0.5 && x + w > e.x + 0.5 && y < e.y + e.h - 0.5 && y + h > e.y + 0.5)
+        maxBottom = Math.max(maxBottom, e.y + e.h);
+    }
+    if(maxBottom === -Infinity) break;
+    y = maxBottom + 3;
   }
-  return list;
+  return y;
 }
-/* ===== v1.5.1 拖动实时排版预览：在元素副本上计算重排式样，不碰真实数据 ===== */
-function calcGhostReflow(){
+function calcEvade(x, y, w, h, skipId, moveX){ /* 重叠时的避让落位；返回 {x,y} 或 null（不重叠/off） */
   var mode = state.pgSet.layoutMode;
   if(!mode || mode === "off") return null;
-  var copies = els().filter(function(e){ return e.type !== "line"; })
-    .map(function(e){ return { id:e.id, x:e.x, y:e.y, w:e.w, h:e.h }; }); /* 含被拖元素实时坐标 */
-  var hits = false;
-  for(var i = 0; i < copies.length && !hits; i++)
-    for(var j = i + 1; j < copies.length; j++)
-      if(rectsOverlap(copies[i], copies[j])){ hits = true; break; }
-  if(!hits) return null;
-  return reflowEls(mode, copies);
+  if(!overlapsAnyAt(x, y, w, h, skipId)) return null;
+  var ex = x;
+  if(moveX && mode === "cols2"){ /* 双列：x 吸附到较近的一列 */
+    var a = innerArea(), half = (a.w - 3) / 2;
+    ex = (x + w / 2 < a.w / 2) ? 0 : Math.round((half + 3) * 10) / 10;
+  }
+  return { x: ex, y: evadeDropY(ex, y, w, h, skipId) };
 }
-function showGhost(list, activeId){
-  var paper = $("editorPaper");
-  if(!paper) return;
-  var layer = $("ghostLayer");
-  if(!layer){ layer = document.createElement("div"); layer.id = "ghostLayer"; paper.appendChild(layer); }
-  layer.innerHTML = list.map(function(e){
-    return '<div class="ghost-el'+(e.id===activeId?" active":"")+'" style="left:'+e.x+'mm;top:'+e.y+'mm;width:'+e.w+'mm;height:'+e.h+'mm"></div>';
-  }).join("");
+function autoEvade(el, moveX){ /* 落位应用：只改被操作控件坐标，其他控件不动；返回是否移动 */
+  var p = calcEvade(el.x, el.y, el.w, el.h, el.id, moveX);
+  if(!p) return false;
+  el.x = p.x; el.y = p.y;
+  return true;
 }
 function hideGhost(){
   var layer = $("ghostLayer");
@@ -1512,14 +1492,7 @@ function showGhostAlign(dragPos, line){
   if(!layer){ layer = document.createElement("div"); layer.id = "ghostLayer"; paper.appendChild(layer); }
   layer.innerHTML =
     '<div class="ghost-el active" style="left:'+dragPos.x+'mm;top:'+dragPos.y+'mm;width:'+dragPos.w+'mm;height:'+dragPos.h+'mm"></div>' +
-    '<div class="ghost-refline" style="top:'+line.y+'mm;left:'+line.x1+'mm;width:'+(line.x2-line.x1)+'mm"></div>';
-}
-function autoReflow(){ /* 触发式重排：仅在开启模式且存在重叠时执行，返回是否发生重排 */
-  var mode = state.pgSet.layoutMode;
-  if(!mode || mode === "off") return false;
-  if(!hasOverlapEls()) return false;
-  reflowEls(mode);
-  return true;
+    (line ? '<div class="ghost-refline" style="top:'+line.y+'mm;left:'+line.x1+'mm;width:'+(line.x2-line.x1)+'mm"></div>' : "");
 }
 function alignSel(el, dir){
   var a = innerArea();
@@ -1588,7 +1561,7 @@ document.addEventListener("drop", function(e){
     w: d.w, h: d.h, props: JSON.parse(JSON.stringify(d.props)) };
   els().push(el);
   state.selectedId = el.id;
-  autoReflow(); /* v1.5 拖入元素与现有元素重叠时自动重排 */
+  autoEvade(el, true); /* v1.5.3 拖入与现有控件重叠 → 下落避让 */
   renderContent();
   commit();
   saveState();
