@@ -884,7 +884,7 @@ function renderPanelPage(){
   /* v1.5 自动排版：控件重叠时不允许堆叠，自动换行或排成双列 */
   html += '<div class="ps-sec">自动排版</div>';
   html += '<div class="ps-grid"><div><label>堆叠处理 ⓘ</label><select id="psLayout"><option value="off">不重排</option><option value="wrap">重叠时自动换行</option><option value="cols2">重叠时排成双列</option></select></div><div></div></div>';
-  html += '<div class="empty-tip" style="margin-top:4px">拖到其他控件上方：被拖控件自动下落到空位（虚影预览），其他控件不动；与控件水平同行：自动顶部对齐（红色吸附线）</div>';
+  html += '<div class="empty-tip" style="margin-top:4px">拖到其他控件上方：自动并排到该行空位（顶对齐）或下落到空位，其他控件不动；与控件水平同行：自动顶部对齐（红色吸附线）</div>';
   html += '<div class="ps-sec">页头页尾配置</div>';
   html += '<div class="ps-row"><span>显示页头页尾</span><label class="sw"><input type="checkbox" id="psHf"'+(g.hfShow?" checked":"")+'><i></i></label></div>';
   if(g.hfShow){
@@ -1290,25 +1290,17 @@ function bindElDrag(div, el){
       el.x = ox + (e.clientX-startX)/MM; el.y = oy + (e.clientY-startY)/MM;
       div.style.left = el.x+"mm"; div.style.top = el.y+"mm";
       moveFloatBar(el);
-      /* v1.5.3 重叠 → 下落避让落位虚影；同行 → 顶部吸附线 */
-      var p = calcEvade(el.x, el.y, el.w, el.h, el.id, true);
-      if(p){ showGhostAlign({ x: p.x, y: p.y, w: el.w, h: el.h }, null); }
-      else{
-        var al = rowAlignCalc(el.id);
-        if(al) showGhostAlign({ x: el.x, y: al.y, w: el.w, h: el.h }, al);
-        else hideGhost();
-      }
+      /* v1.5.4 统一吸附预览：行内并排 / 顶对齐吸附（带参考线）/ 下落避让 */
+      var s = calcSnap(el.x, el.y, el.w, el.h, el.id, true);
+      if(s) showGhostAlign({ x: s.x, y: s.y, w: el.w, h: el.h }, s.line || null);
+      else hideGhost();
     }
     function onUp(){
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       hideGhost();
-      var did = autoEvade(el, true); /* 重叠 → 下落避让（只动自己） */
-      if(!did){
-        var al = rowAlignCalc(el.id); /* 同行 → 顶部对齐吸附（对方不动） */
-        if(al){ el.y = al.y; did = true; }
-      }
-      if(did) renderContent();
+      var s = calcSnap(el.x, el.y, el.w, el.h, el.id, true);
+      if(s){ el.x = s.x; el.y = s.y; renderContent(); }
       commit(); saveState();
     }
     document.addEventListener("mousemove", onMove);
@@ -1457,6 +1449,54 @@ function calcEvade(x, y, w, h, skipId, moveX){ /* 重叠时的避让落位；返
   }
   return { x: ex, y: evadeDropY(ex, y, w, h, skipId) };
 }
+/* ===== v1.5.4 行内并排（参考官方 DocGenius）：拖到控件上时优先插入该行左右空位，顶对齐 ===== */
+function rowSlotCalc(x, y, w, h, skipId){
+  var list = els(), hit = null, best = 0, i, e;
+  /* 找重叠面积最大的控件作为贴靠目标 */
+  for(i = 0; i < list.length; i++){
+    e = list[i];
+    if(e.id === skipId || e.type === "line") continue;
+    var ox = Math.min(x + w, e.x + e.w) - Math.max(x, e.x);
+    var oy = Math.min(y + h, e.y + e.h) - Math.max(y, e.y);
+    if(ox > 0.5 && oy > 0.5 && ox * oy > best){ best = ox * oy; hit = e; }
+  }
+  if(!hit) return null;
+  /* 目标行 = 与 hit y 区间重叠的所有控件，行顶 minY 为对齐线 */
+  var rowY = hit.y, x1 = Math.min(x, hit.x), x2 = Math.max(x + w, hit.x + hit.w);
+  list.forEach(function(t){
+    if(t.id === skipId || t.type === "line") return;
+    if(t.y < hit.y + hit.h - 0.5 && t.y + t.h > hit.y + 0.5){
+      rowY = Math.min(rowY, t.y);
+      x1 = Math.min(x1, t.x); x2 = Math.max(x2, t.x + t.w);
+    }
+  });
+  var gap = 3, aw = innerArea().w;
+  var left = hit.x - w - gap, right = hit.x + hit.w + gap;
+  /* 按被拖控件重心在哪侧，优先贴靠该侧 */
+  var cands = (x + w / 2 <= hit.x + hit.w / 2) ? [left, right] : [right, left];
+  for(i = 0; i < cands.length; i++){
+    var cx = cands[i];
+    if(cx < 0 || cx + w > aw + 0.5) continue;
+    if(!overlapsAnyAt(cx, rowY, w, h, skipId))
+      return { x: Math.round(cx * 10) / 10, y: rowY, line: { y: rowY, x1: Math.min(x1, cx), x2: Math.max(x2, cx + w) } };
+  }
+  return null; /* 行内无空位 → 调用方走下落 */
+}
+/* 统一吸附决策：同行顶对齐 > 重叠时行内并排（wrap）/列吸附（cols2）> 下落兜底 */
+function calcSnap(x, y, w, h, skipId, moveX){
+  var mode = state.pgSet.layoutMode;
+  if(!mode || mode === "off") return null;
+  if(!overlapsAnyAt(x, y, w, h, skipId)){
+    var al = rowAlignCalc(skipId); /* 不重叠但同行 → 顶部吸附 */
+    return al ? { x: x, y: al.y, line: al } : null;
+  }
+  if(mode === "cols2") return calcEvade(x, y, w, h, skipId, moveX); /* 双列：列吸附 + 下落 */
+  if(moveX){
+    var slot = rowSlotCalc(x, y, w, h, skipId); /* wrap：行内并排优先（resize 不改 x，跳过） */
+    if(slot) return slot;
+  }
+  return { x: x, y: evadeDropY(x, y, w, h, skipId) }; /* 无空位 → 下落兜底 */
+}
 function autoEvade(el, moveX){ /* 落位应用：只改被操作控件坐标，其他控件不动；返回是否移动 */
   var p = calcEvade(el.x, el.y, el.w, el.h, el.id, moveX);
   if(!p) return false;
@@ -1561,7 +1601,8 @@ document.addEventListener("drop", function(e){
     w: d.w, h: d.h, props: JSON.parse(JSON.stringify(d.props)) };
   els().push(el);
   state.selectedId = el.id;
-  autoEvade(el, true); /* v1.5.3 拖入与现有控件重叠 → 下落避让 */
+  var ds = calcSnap(el.x, el.y, el.w, el.h, el.id, true); /* v1.5.4 拖入 → 行内并排/顶对齐/下落 */
+  if(ds){ el.x = ds.x; el.y = ds.y; }
   renderContent();
   commit();
   saveState();

@@ -215,6 +215,48 @@ function calcEvade(list: LayoutEl[], x: number, y: number, w: number, h: number,
   }
   return { x: ex, y: evadeDropY(list, ex, y, w, h, skipId) };
 }
+/** v1.5.4 行内并排（参考官方 DocGenius）：重叠时找重叠面积最大控件所在行的左右空位，顶对齐 */
+function rowSlotCalc(list: LayoutEl[], x: number, y: number, w: number, h: number, skipId: string, areaW: number): { x: number; y: number; line: { y: number; x1: number; x2: number } } | null {
+  let hit: LayoutEl | null = null, best = 0;
+  for (const e of list) {
+    if (e.id === skipId || e.type === "line") continue;
+    const ox = Math.min(x + w, e.x + e.w) - Math.max(x, e.x);
+    const oy = Math.min(y + h, e.y + e.h) - Math.max(y, e.y);
+    if (ox > 0.5 && oy > 0.5 && ox * oy > best) { best = ox * oy; hit = e; }
+  }
+  if (!hit) return null;
+  let rowY = hit.y, x1 = Math.min(x, hit.x), x2 = Math.max(x + w, hit.x + hit.w);
+  for (const t of list) {
+    if (t.id === skipId || t.type === "line") continue;
+    if (t.y < hit!.y + hit!.h - 0.5 && t.y + t.h > hit!.y + 0.5) {
+      rowY = Math.min(rowY, t.y);
+      x1 = Math.min(x1, t.x); x2 = Math.max(x2, t.x + t.w);
+    }
+  }
+  const gap = 3;
+  const left = hit.x - w - gap, right = hit.x + hit.w + gap;
+  const cands = (x + w / 2 <= hit.x + hit.w / 2) ? [left, right] : [right, left];
+  for (const cx of cands) {
+    if (cx < 0 || cx + w > areaW + 0.5) continue;
+    if (!overlapsAnyAt(list, cx, rowY, w, h, skipId))
+      return { x: Math.round(cx * 10) / 10, y: rowY, line: { y: rowY, x1: Math.min(x1, cx), x2: Math.max(x2, cx + w) } };
+  }
+  return null;
+}
+/** 统一吸附决策：同行顶对齐 > 重叠时行内并排（wrap）/列吸附（cols2）> 下落兜底；moveX=false（resize）跳过并排 */
+function calcSnap(list: LayoutEl[], x: number, y: number, w: number, h: number, skipId: string, moveX: boolean, mode: string | undefined, areaW: number): { x: number; y: number; line?: { y: number; x1: number; x2: number } } | null {
+  if (!mode || mode === "off") return null;
+  if (!overlapsAnyAt(list, x, y, w, h, skipId)) {
+    const al = rowAlignCalc(list, skipId);
+    return al ? { x, y: al.y, line: al } : null;
+  }
+  if (moveX && mode === "cols2") return calcEvade(list, x, y, w, h, skipId, mode, moveX, areaW);
+  if (moveX) {
+    const slot = rowSlotCalc(list, x, y, w, h, skipId, areaW);
+    if (slot) return slot;
+  }
+  return { x, y: evadeDropY(list, x, y, w, h, skipId) };
+}
 /** v1.5.2 同行顶部吸附：与已放置控件水平同行（y 区间重叠）且顶部不齐时，返回吸附目标（参考 DocuGenius 排版效果） */
 function rowAlignCalc(list: LayoutEl[], dragId: string): { y: number; x1: number; x2: number } | null {
   const drag = list.find((e) => e.id === dragId);
@@ -822,9 +864,9 @@ export default function App() {
     if (TEXT_LIKE.includes(el.type) && el.props.fontSize) el.props.fontSize = defPx;
     mutateEls((list) => {
       let next = [...list, el];
-      /* v1.5.3 拖入与现有控件重叠 → 下落避让（其他控件不动） */
-      const p = calcEvade(next, el.x, el.y, el.w, el.h, el.id, pgSet.layoutMode, true, innerArea().w);
-      if (p) next = next.map((it) => (it.id === el.id ? { ...it, x: p.x, y: p.y } : it));
+      /* v1.5.4 拖入 → 行内并排/顶对齐/下落（其他控件不动） */
+      const s = calcSnap(next, el.x, el.y, el.w, el.h, el.id, true, pgSet.layoutMode, innerArea().w);
+      if (s) next = next.map((it) => (it.id === el.id ? { ...it, x: s.x, y: s.y } : it));
       return next;
     });
     setSelectedId(el.id);
@@ -847,15 +889,11 @@ export default function App() {
         return { ...it, w: Math.max(3, ow + dx), h: Math.max(2, oh + dy) };
       });
       setEls(last);
-      /* v1.5.3 重叠 → 下落避让落位虚影；同行 → 顶部吸附线 */
+      /* v1.5.4 统一吸附预览：行内并排 / 顶对齐吸附（带参考线）/ 下落避让 */
       const cur = last.find((it) => it.id === el.id)!;
-      const p = calcEvade(last, cur.x, cur.y, cur.w, cur.h, el.id, pgSet.layoutMode, kind === "move", innerArea().w);
-      if (p) setGhost({ list: [{ ...cur, x: p.x, y: p.y }], activeId: el.id });
-      else {
-        const al = rowAlignCalc(last, el.id);
-        if (al) setGhost({ list: [{ ...cur, y: al.y }], activeId: el.id, refLine: al });
-        else setGhost(null);
-      }
+      const s = calcSnap(last, cur.x, cur.y, cur.w, cur.h, el.id, kind === "move", pgSet.layoutMode, innerArea().w);
+      if (s) setGhost({ list: [{ ...cur, x: s.x, y: s.y }], activeId: el.id, refLine: s.line });
+      else setGhost(null);
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
@@ -864,13 +902,8 @@ export default function App() {
       if (last) {
         let next = last;
         const cur = next.find((it) => it.id === el.id)!;
-        /* 重叠 → 下落避让（只动自己）；同行 → 顶部对齐吸附（对方不动） */
-        const p = calcEvade(next, cur.x, cur.y, cur.w, cur.h, el.id, pgSet.layoutMode, kind === "move", innerArea().w);
-        if (p) next = next.map((it) => (it.id === el.id ? { ...it, x: p.x, y: p.y } : it));
-        else {
-          const al = rowAlignCalc(next, el.id);
-          if (al) next = next.map((it) => (it.id === el.id ? { ...it, y: al.y } : it));
-        }
+        const s = calcSnap(next, cur.x, cur.y, cur.w, cur.h, el.id, kind === "move", pgSet.layoutMode, innerArea().w);
+        if (s) next = next.map((it) => (it.id === el.id ? { ...it, x: s.x, y: s.y } : it));
         setEls(next);
         commit(next);
       }
@@ -1227,7 +1260,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                         </select></div>
                       <div />
                     </div>
-                    <div className="empty-tip" style={{ marginTop: 4 }}>拖到其他控件上方：被拖控件自动下落到空位（虚影预览），其他控件不动；与控件水平同行：自动顶部对齐（红色吸附线）</div>
+                    <div className="empty-tip" style={{ marginTop: 4 }}>拖到其他控件上方：自动并排到该行空位（顶对齐）或下落到空位，其他控件不动；与控件水平同行：自动顶部对齐（红色吸附线）</div>
                     <div className="ps-sec">页头页尾配置</div>
                     <div className="ps-row"><span>显示页头页尾</span>
                       <label className="sw"><input type="checkbox" checked={pgSet.hfShow} onChange={(e) => setPgSet({ ...pgSet, hfShow: e.target.checked })} /><i></i></label></div>
