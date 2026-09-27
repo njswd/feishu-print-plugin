@@ -223,6 +223,12 @@ function reflowEls(list: LayoutEl[], mode: string, areaW: number): LayoutEl[] {
     return p ? { ...e, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : e;
   });
 }
+/** v1.5.1 拖动实时预览：存在重叠时计算重排式样（纯函数不改原数组），无重叠返回 null */
+function calcGhostReflow(list: LayoutEl[], mode: string | undefined, areaW: number): LayoutEl[] | null {
+  if (!mode || mode === "off") return null;
+  if (!hasOverlapEls(list)) return null;
+  return reflowEls(list, mode, areaW);
+}
 function fieldExists(f: string, names: string[]): boolean {
   const m = f.match(/^SUM\((.+)\)$/);
   const name = (m ? m[1] : f).trim();
@@ -374,7 +380,7 @@ export default function App() {
   const [margins, setMargins] = useState({ t: 15, r: 15, b: 15, l: 15 }); // v1.0 四边边距(mm)
   const [perPage, setPerPage] = useState(8);
   const [editPanel, setEditPanel] = useState<"comp" | "data" | "page" | "setting" | "inspector">("comp"); // v1.0 侧栏面板
-  const [pgSet, setPgSet] = useState({ rotate: "default", continuous: false, hfShow: false, hfGap: 2.82, mirror: false, hideFirst: false, layoutMode: "off" });
+  const [pgSet, setPgSet] = useState({ rotate: "default", continuous: false, hfShow: false, hfGap: 2.82, mirror: false, hideFirst: false, layoutMode: "wrap" });
   const [appSet, setAppSet] = useState({ fontPt: 10, lineHeight: 1.5, paraGap: 0, wmMode: "text", wmText: "" });
   const [dsTab, setDsTab] = useState<"field" | "sys">("field");
   const [dsSearch, setDsSearch] = useState("");
@@ -383,6 +389,7 @@ export default function App() {
   const [atCtx, setAtCtx] = useState<{ elId: string; col: number; field: string | null; title: string } | null>(null); // v1.3 编辑列上下文（col=-1 列尾新增）
   const [acSearch, setAcSearch] = useState(""); // v1.3 编辑列对话框字段搜索
   const [atPop, setAtPop] = useState<{ elId: string; col: number; field: string; ok: boolean; x: number; y: number } | null>(null); // v1.4 自动表格 chip 气泡
+  const [ghost, setGhost] = useState<{ list: LayoutEl[]; activeId: string } | null>(null); // v1.5.1 拖动实时排版预览
 
   const editorRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -716,6 +723,11 @@ export default function App() {
         if (d.margins && typeof d.margins.t === "number") setMargins(d.margins);
         else if (d.margin) setMargins({ t: d.margin, r: d.margin, b: d.margin, l: d.margin });
         if (d.pgSet) setPgSet((prev) => ({ ...prev, ...d.pgSet }));
+        /* v1.5.1 一次性迁移：旧版默认 off → wrap（拖动实时预览开箱即用） */
+        if (!localStorage.getItem(SAVE_KEY + ".mig151")) {
+          localStorage.setItem(SAVE_KEY + ".mig151", "1");
+          setPgSet((prev) => ({ ...prev, layoutMode: "wrap" }));
+        }
         if (d.appSet) setAppSet((prev) => ({ ...prev, ...d.appSet }));
         if (d.perPage) setPerPage(d.perPage);
       }
@@ -832,12 +844,16 @@ export default function App() {
         return { ...it, w: Math.max(3, ow + dx), h: Math.max(2, oh + dy) };
       });
       setEls(last);
+      /* v1.5.1 拖到其他控件上方时，实时显示下一步排版式样（虚线框） */
+      const g = calcGhostReflow(last, pgSet.layoutMode, innerArea().w);
+      setGhost(g ? { list: g, activeId: el.id } : null);
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      setGhost(null);
       if (last) {
-        /* v1.5 拖动/缩放结束后重叠自动重排 */
+        /* 按预览式样落位 */
         const mode = pgSet.layoutMode;
         const next = mode && mode !== "off" && hasOverlapEls(last) ? reflowEls(last, mode, innerArea().w) : last;
         setEls(next);
@@ -1191,11 +1207,12 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                     <div className="ps-sec">自动排版</div>
                     <div className="ps-grid">
                       <div><label>堆叠处理 ⓘ</label>
-                        <select value={pgSet.layoutMode || "off"} onChange={(e) => setPgSet({ ...pgSet, layoutMode: e.target.value })}>
+                        <select value={pgSet.layoutMode || "wrap"} onChange={(e) => setPgSet({ ...pgSet, layoutMode: e.target.value })}>
                           <option value="off">不重排</option><option value="wrap">重叠时自动换行</option><option value="cols2">重叠时排成双列</option>
                         </select></div>
                       <div />
                     </div>
+                    <div className="empty-tip" style={{ marginTop: 4 }}>拖动控件到其他控件上方时，实时显示重排式样（虚线框），松手自动落位，不允许堆叠</div>
                     <div className="ps-sec">页头页尾配置</div>
                     <div className="ps-row"><span>显示页头页尾</span>
                       <label className="sw"><input type="checkbox" checked={pgSet.hfShow} onChange={(e) => setPgSet({ ...pgSet, hfShow: e.target.checked })} /><i></i></label></div>
@@ -1572,6 +1589,15 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   <div className="resize-handle" onMouseDown={(e) => startDrag(e, el, "resize")} />
                 </div>
               ))}
+              {/* v1.5.1 拖动实时排版预览：重叠时显示重排式样虚线框 */}
+              {ghost && (
+                <div className="ghost-layer">
+                  {ghost.list.map((g) => (
+                    <div key={g.id} className={"ghost-el" + (g.id === ghost.activeId ? " active" : "")}
+                      style={{ left: g.x + "mm", top: g.y + "mm", width: g.w + "mm", height: g.h + "mm" }} />
+                  ))}
+                </div>
+              )}
               {/* v1.1 输入【快速插入字段：光标处字段选择浮层 */}
               {fp && (
                 <div className="field-picker"

@@ -72,6 +72,10 @@
   .el .content[contenteditable]:focus{outline:1px dashed var(--blue);}
   .resize-handle{position:absolute; right:-5px; bottom:-5px; width:10px; height:10px; background:var(--blue); border:2px solid #fff; border-radius:50%; cursor:nwse-resize; display:none; z-index:5;}
   .el.selected .resize-handle{display:block;}
+  /* ===== v1.5.1 拖动实时排版预览：重叠时显示重排式样虚线框 ===== */
+  #ghostLayer{position:absolute; left:0; top:0; right:0; bottom:0; pointer-events:none; z-index:60;}
+  #ghostLayer .ghost-el{position:absolute; border:1.5px dashed var(--blue); background:rgba(51,112,255,.07); border-radius:3px; box-sizing:border-box;}
+  #ghostLayer .ghost-el.active{border-style:solid; background:rgba(51,112,255,.14); box-shadow:0 2px 10px rgba(51,112,255,.25);}
   .el-text .content{line-height:1.6; word-break:break-all; white-space:pre-wrap;}
   .el-line{border-top:1.5px solid #333;}
   .el-table table{width:100%; height:100%; border-collapse:collapse;}
@@ -417,7 +421,7 @@ var state = {
   margins: { t:15, r:15, b:15, l:15 },   /* v1.0 四边边距(mm) */
   editPanel: "comp",                      /* v1.0 侧栏面板: comp|data|page|setting|inspector */
   dsTab: "field", dsSearch: "", loopOpen: false,   /* v1.0 数据源面板状态 */
-  pgSet: { rotate:"default", continuous:false, hfShow:false, hfGap:2.82, mirror:false, hideFirst:false, layoutMode:"off" },
+  pgSet: { rotate:"default", continuous:false, hfShow:false, hfGap:2.82, mirror:false, hideFirst:false, layoutMode:"wrap" },
   appSet: { fontPt:10, lineHeight:1.5, paraGap:0, wmMode:"text", wmText:"" }
 };
 var nextId = 100;
@@ -468,6 +472,12 @@ function loadState(){
     if(d.margins && typeof d.margins.t === "number") state.margins = d.margins;
     else if(d.margin) state.margins = { t:d.margin, r:d.margin, b:d.margin, l:d.margin };
     if(d.pgSet) state.pgSet = Object.assign(state.pgSet, d.pgSet);
+    /* v1.5.1 一次性迁移：旧版默认 off → wrap（拖动实时预览开箱即用） */
+    if(!localStorage.getItem("print-plugin-layout-v4.mig151")){
+      localStorage.setItem("print-plugin-layout-v4.mig151", "1");
+      state.pgSet.layoutMode = "wrap";
+      saveState();
+    }
     if(d.appSet) state.appSet = Object.assign(state.appSet, d.appSet);
     var max = 0;
     state.templates.forEach(function(t){ t.elements.forEach(function(e){ var n=parseInt(e.id.slice(1)); if(n>max) max=n; }); });
@@ -872,6 +882,7 @@ function renderPanelPage(){
   /* v1.5 自动排版：控件重叠时不允许堆叠，自动换行或排成双列 */
   html += '<div class="ps-sec">自动排版</div>';
   html += '<div class="ps-grid"><div><label>堆叠处理 ⓘ</label><select id="psLayout"><option value="off">不重排</option><option value="wrap">重叠时自动换行</option><option value="cols2">重叠时排成双列</option></select></div><div></div></div>';
+  html += '<div class="empty-tip" style="margin-top:4px">拖动控件到其他控件上方时，实时显示重排式样（虚线框），松手自动落位，不允许堆叠</div>';
   html += '<div class="ps-sec">页头页尾配置</div>';
   html += '<div class="ps-row"><span>显示页头页尾</span><label class="sw"><input type="checkbox" id="psHf"'+(g.hfShow?" checked":"")+'><i></i></label></div>';
   if(g.hfShow){
@@ -978,7 +989,7 @@ function bindEditPanel(side){
   });
   var pr = $("psPer"); if(pr){ pr.addEventListener("input", function(){ state.perPage = +this.value || 8; renderAll(); saveState(); }); }
   var prr = $("psRot"); if(prr){ prr.value = state.pgSet.rotate; prr.addEventListener("change", function(){ state.pgSet.rotate = this.value; saveState(); }); }
-  var ply = $("psLayout"); if(ply){ ply.value = state.pgSet.layoutMode || "off"; ply.addEventListener("change", function(){ state.pgSet.layoutMode = this.value; saveState(); }); } /* v1.5 自动排版 */
+  var ply = $("psLayout"); if(ply){ ply.value = state.pgSet.layoutMode || "wrap"; ply.addEventListener("change", function(){ state.pgSet.layoutMode = this.value; saveState(); }); } /* v1.5 自动排版 */
   var pc = $("psCont"); if(pc) pc.addEventListener("change", function(){ state.pgSet.continuous = this.checked; saveState(); });
   var ph = $("psHf"); if(ph) ph.addEventListener("change", function(){ state.pgSet.hfShow = this.checked; renderSide(); saveState(); });
   var phh = $("psHh"); if(phh) phh.addEventListener("input", function(){ state.pgSet.hfGap = +this.value || 2.82; saveState(); });
@@ -1277,11 +1288,15 @@ function bindElDrag(div, el){
       el.x = ox + (e.clientX-startX)/MM; el.y = oy + (e.clientY-startY)/MM;
       div.style.left = el.x+"mm"; div.style.top = el.y+"mm";
       moveFloatBar(el);
+      /* v1.5.1 拖到其他控件上方时，实时显示下一步排版式样（虚线框） */
+      var g = calcGhostReflow();
+      if(g) showGhost(g, el.id); else hideGhost();
     }
     function onUp(){
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      if(autoReflow()) renderContent(); /* v1.5 拖动结束后重叠自动重排 */
+      hideGhost();
+      if(autoReflow()) renderContent(); /* 按预览式样落位 */
       commit(); saveState();
     }
     document.addEventListener("mousemove", onMove);
@@ -1405,9 +1420,9 @@ function hasOverlapEls(){
       if(rectsOverlap(list[i], list[j])) return true;
   return false;
 }
-function reflowEls(mode){
+function reflowEls(mode, list){
+  list = (list || reflowList()).slice().sort(function(p, q){ return p.y - q.y || p.x - q.x; }); /* slice 防御：不改动调用方数组顺序 */
   var a = innerArea(), gap = 3;
-  var list = reflowList().sort(function(p, q){ return p.y - q.y || p.x - q.x; }); /* 保持用户大致视觉顺序 */
   if(mode === "cols2"){
     /* 双列贪心：每次放到较矮的一列；宽于半列的元素（如宽表格）独占整行 */
     var half = (a.w - gap) / 2, colY = [0, 0];
@@ -1432,6 +1447,33 @@ function reflowEls(mode){
       rowH = Math.max(rowH, e.h);
     });
   }
+  return list;
+}
+/* ===== v1.5.1 拖动实时排版预览：在元素副本上计算重排式样，不碰真实数据 ===== */
+function calcGhostReflow(){
+  var mode = state.pgSet.layoutMode;
+  if(!mode || mode === "off") return null;
+  var copies = els().filter(function(e){ return e.type !== "line"; })
+    .map(function(e){ return { id:e.id, x:e.x, y:e.y, w:e.w, h:e.h }; }); /* 含被拖元素实时坐标 */
+  var hits = false;
+  for(var i = 0; i < copies.length && !hits; i++)
+    for(var j = i + 1; j < copies.length; j++)
+      if(rectsOverlap(copies[i], copies[j])){ hits = true; break; }
+  if(!hits) return null;
+  return reflowEls(mode, copies);
+}
+function showGhost(list, activeId){
+  var paper = $("editorPaper");
+  if(!paper) return;
+  var layer = $("ghostLayer");
+  if(!layer){ layer = document.createElement("div"); layer.id = "ghostLayer"; paper.appendChild(layer); }
+  layer.innerHTML = list.map(function(e){
+    return '<div class="ghost-el'+(e.id===activeId?" active":"")+'" style="left:'+e.x+'mm;top:'+e.y+'mm;width:'+e.w+'mm;height:'+e.h+'mm"></div>';
+  }).join("");
+}
+function hideGhost(){
+  var layer = $("ghostLayer");
+  if(layer) layer.innerHTML = "";
 }
 function autoReflow(){ /* 触发式重排：仅在开启模式且存在重叠时执行，返回是否发生重排 */
   var mode = state.pgSet.layoutMode;
