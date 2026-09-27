@@ -932,10 +932,13 @@ function bindElDrag(div, el){
 /* ===== v0.7 浮动工具条 ===== */
 var floatBar = null;
 function buildFloatBar(){
+  /* v0.8.1 修复：先清掉旧的浮动条，避免移动/点击时积累重影 */
+  document.querySelectorAll(".float-bar").forEach(function(n){ n.remove(); });
   floatBar = null;
   var sel = selected();
   if(!sel) return;
   var paper = $("editorPaper");
+  if(!paper) return;
   var bar = document.createElement("div");
   bar.className = "float-bar";
   bar.style.left = sel.x + "mm";
