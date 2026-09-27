@@ -81,6 +81,19 @@
   .el-autotable th.at-add{cursor:pointer; text-align:center; color:#3370ff; background:#f0f4ff; font-weight:400; width:34px;}
   .el-autotable th.at-add:hover{background:#e1eaff;}
   .el-autotable .at-chip{cursor:pointer;}
+  /* v1.3 编辑列对话框：列头 th 可点击 */
+  .el-autotable th.at-th{cursor:pointer;}
+  .el-autotable th.at-th:hover{background:#e1eaff;}
+  .fm-form{padding:12px 16px 0; display:flex; align-items:center; gap:10px;}
+  .fm-form label{font-size:12px; color:#4e5969; flex:none;}
+  .fm-form input{flex:1;}
+  .fm-foot{display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-top:1px solid #f0f1f3;}
+  .fm-delcol{border:none; background:none; color:#f0473f; font-size:12px; cursor:pointer; padding:6px 8px; border-radius:6px;}
+  .fm-delcol:hover{background:#ffece8;}
+  .fm-ok{border:none; background:var(--blue); color:#fff; font-size:13px; cursor:pointer; padding:7px 22px; border-radius:6px; margin-left:auto;}
+  .fm-ok:hover{opacity:.9;}
+  .fm-item.active{background:#e8f0ff;}
+  .fm-item.active b{color:var(--blue);}
   .el-img img{width:100%; height:100%; object-fit:contain;}
   .el-qr,.el-bar{background:#fff; display:flex; align-items:center; justify-content:center; overflow:hidden;}
   .qr-box img{width:100%; height:100%;}
@@ -303,6 +316,20 @@
     <div class="fm-head"><span>更换字段</span><button class="fm-close" onclick="closeFieldDlg()">✕</button></div>
     <input class="fm-search" id="fieldSearch" placeholder="搜索字段" oninput="renderFieldList(this.value)">
     <div class="fm-list" id="fieldList"></div>
+  </div>
+</div>
+
+<!-- v1.3 编辑自动表格列对话框 -->
+<div class="modal-mask" id="autoColModal">
+  <div class="modal field-modal">
+    <div class="fm-head"><span>编辑列</span><button class="fm-close" onclick="closeAutoColDlg()">✕</button></div>
+    <div class="fm-form"><label>列头文字</label><input id="atTitleInput" placeholder="留空则显示字段名" oninput="if(atCtx) atCtx.title = this.value"></div>
+    <input class="fm-search" id="acSearch" placeholder="搜索关联字段" oninput="renderAutoColList(this.value)" style="margin-top:10px;">
+    <div class="fm-list" id="acList"></div>
+    <div class="fm-foot">
+      <button class="fm-delcol" id="atDelBtn" onclick="deleteAutoCol()">🗑 删除此列</button>
+      <button class="fm-ok" onclick="applyAutoColumn()">确定</button>
+    </div>
   </div>
 </div>
 
@@ -554,13 +581,19 @@ function renderElContent(el, data, rows, edit){
       }
       return '<div class="content el-table" style="'+style+'">'+html+"</div>";
     case "autotable":
-      var fs = autoFieldsOf(el); /* v1.1 列字段支持 per-element 关联，fallback 全局 autoFields */
-      var head = "<tr>"+fs.map(function(f){ return "<th>"+esc(f)+"</th>"; }).join("")
+      var fs = autoFieldsOf(el); /* v1.3 列字段支持 per-element 关联，undefined 才 fallback 全局 */
+      var titles = el.props.titles || []; /* v1.3 列头自定义文字 */
+      var head = "<tr>"+fs.map(function(f, ci){
+          var th = edit
+            ? '<th class="at-th" data-col="'+ci+'" title="点击编辑列">'+esc(titles[ci]||f)+'</th>'
+            : "<th>"+esc(titles[ci]||f)+"</th>";
+          return th;
+        }).join("")
         + (edit ? '<th class="at-add" data-add="1" title="添加字段列">＋</th>' : "") + "</tr>";
       var body = RECORDS.slice(0,2).map(function(rec){
         return "<tr>"+fs.map(function(f, ci){
           var cell = edit
-            ? '<span class="fld-chip chip-ok at-chip" data-col="'+ci+'" title="点击更换关联字段">'+esc(f)+' <i class="chip-caret">⌄</i></span>'
+            ? '<span class="fld-chip chip-ok at-chip" data-col="'+ci+'" title="点击编辑列">'+esc(f)+' <i class="chip-caret">⌄</i></span>'
             : esc(rec[f]||"");
           return "<td>"+cell+"</td>";
         }).join("")+"</tr>";
@@ -640,8 +673,9 @@ function buildPages(area){
       div.style.width = el.w+"mm"; div.style.height = el.h+"mm";
       if(el.type === "autotable"){
         var fs = autoFieldsOf(el);
+        var titles = el.props.titles || []; /* v1.3 列头自定义文字 */
         var rows = pg.rows || [];
-        var html = "<table><tr>"+fs.map(function(f){ return "<th>"+esc(f)+"</th>"; }).join("")+"</tr>";
+        var html = "<table><tr>"+fs.map(function(f, ci){ return "<th>"+esc(titles[ci]||f)+"</th>"; }).join("")+"</tr>";
         rows.forEach(function(rec){
           html += "<tr>"+fs.map(function(f){ return "<td>"+esc(rec[f]||"")+"</td>"; }).join("")+"</tr>";
         });
@@ -1536,40 +1570,27 @@ function fieldMeta(name){
   return { ic:"A≡", type:"文本" };
 }
 
-/* 捕获阶段拦截：点 chip / 气泡 / 自动表格列头＋ 时不触发元素拖动 */
+/* 捕获阶段拦截：点 chip / 气泡 / 自动表格列头·列尾＋ 时不触发元素拖动 */
 document.addEventListener("mousedown", function(e){
   var chip = e.target.closest ? e.target.closest(".fld-chip") : null;
   var atAdd = e.target.closest ? e.target.closest(".at-add") : null;
-  if(chip || atAdd || (chipPopEl && chipPopEl.contains(e.target))) e.stopPropagation();
+  var atTh = e.target.closest ? e.target.closest(".at-th") : null;
+  if(chip || atAdd || atTh || (chipPopEl && chipPopEl.contains(e.target))) e.stopPropagation();
 }, true);
 
 document.addEventListener("click", function(e){
-  /* v1.1 自动表格列字段 chip（data-col）→ 更换字段对话框 */
-  var atChip = e.target.closest ? e.target.closest(".at-chip") : null;
-  if(atChip){
+  /* v1.3 自动表格列头（at-th）/ 数据行字段 chip（at-chip）/ 列尾＋ → 编辑列对话框 */
+  var atEl = e.target.closest ? e.target.closest(".at-th,.at-chip,.at-add") : null;
+  if(atEl){
     e.stopPropagation(); e.preventDefault();
-    var atDiv = atChip.closest(".el");
+    var atDiv = atEl.closest(".el");
     if(!atDiv) return;
-    atCtx = { elId: atDiv.dataset.id, col: parseInt(atChip.getAttribute("data-col"), 10) };
-    state.selectedId = atCtx.elId;
+    var col = atEl.classList.contains("at-add") ? -1 : parseInt(atEl.getAttribute("data-col"), 10);
+    state.selectedId = atDiv.dataset.id;
     document.querySelectorAll(".el.selected").forEach(function(n){ n.classList.remove("selected"); });
     atDiv.classList.add("selected");
     renderProps();
-    openFieldDlg("auto");
-    return;
-  }
-  /* v1.1 列尾「＋」新增字段列 */
-  var atAdd = e.target.closest ? e.target.closest(".at-add") : null;
-  if(atAdd){
-    e.stopPropagation(); e.preventDefault();
-    var addDiv = atAdd.closest(".el");
-    if(!addDiv) return;
-    atCtx = { elId: addDiv.dataset.id, col: -1 };
-    state.selectedId = atCtx.elId;
-    document.querySelectorAll(".el.selected").forEach(function(n){ n.classList.remove("selected"); });
-    addDiv.classList.add("selected");
-    renderProps();
-    openFieldDlg("auto");
+    openAutoColDlg(atDiv.dataset.id, isNaN(col) ? -1 : col);
     return;
   }
   var chip = e.target.closest ? e.target.closest(".fld-chip") : null;
@@ -1629,16 +1650,15 @@ function eachTextValue(el, fn){
     });
   }
 }
-/* v1.1 自动表格列字段来源：per-element props.fields 优先，fallback 全局 autoFields */
+/* v1.3 自动表格列字段来源：per-element props.fields（undefined 才 fallback 全局；空数组=已删光，显示空表） */
 function autoFieldsOf(el){
-  return (el.props.fields && el.props.fields.length) ? el.props.fields : state.autoFields;
+  return el.props.fields ? el.props.fields : state.autoFields;
 }
-/* v1.1 自动表格列字段上下文：col=-1 表示列尾新增 */
+/* v1.3 编辑列上下文：{elId, col(-1=列尾新增), field(选中字段), title(列头自定义文字)} */
 var atCtx = null;
 
-function openFieldDlg(mode){
+function openFieldDlg(){
   removeChipPop();
-  if(mode !== "auto") atCtx = null; /* 普通 chip 更换模式清掉自动表格上下文 */
   $("fieldSearch").value = "";
   renderFieldList("");
   $("fieldModal").classList.add("show");
@@ -1658,10 +1678,7 @@ function renderFieldList(q){
     }).join("");
   list.innerHTML = html || '<div class="fm-item" style="cursor:default"><span class="fm-ic">∅</span><span class="fm-txt"><b>无匹配字段</b></span></div>';
   list.querySelectorAll(".fm-item[data-f]").forEach(function(it){
-    it.addEventListener("click", function(){
-      if(atCtx) applyAutoField(it.dataset.f);
-      else applyFieldChange(it.dataset.f);
-    });
+    it.addEventListener("click", function(){ applyFieldChange(it.dataset.f); });
   });
 }
 
@@ -1682,17 +1699,86 @@ function applyFieldChange(newField){
   if(changed){ commit(); renderContent(); saveState(); }
 }
 
-/* v1.1 自动表格：更换/新增列的关联字段（atCtx.col=-1 为列尾新增），写回 per-element props.fields */
-function applyAutoField(newField){
+/* ===== v1.3 编辑自动表格列：列头文字自定义 + 关联字段选择 + 删除列 ===== */
+function openAutoColDlg(elId, col){
+  removeChipPop();
+  var el = findElById(elId);
+  if(!el || el.type !== "autotable") return;
+  var fs = autoFieldsOf(el);
+  var titles = el.props.titles || [];
+  atCtx = {
+    elId: elId, col: col,
+    field: col < 0 ? null : (fs[col] || null),
+    title: col < 0 ? "" : (titles[col] || "")
+  };
+  $("atTitleInput").value = atCtx.title;
+  $("acSearch").value = "";
+  $("atDelBtn").style.display = col < 0 ? "none" : "";
+  renderAutoColList("");
+  $("autoColModal").classList.add("show");
+  $("atTitleInput").focus();
+}
+function closeAutoColDlg(){ $("autoColModal").classList.remove("show"); atCtx = null; }
+
+/* 关联字段列表（搜索 + 点选高亮，点「确定」统一生效） */
+function renderAutoColList(q){
+  var list = $("acList");
+  if(!list) return;
+  q = (q || "").trim().toLowerCase();
+  var html = FIELDS.filter(function(f){ return !q || f.toLowerCase().indexOf(q) >= 0; })
+    .map(function(f){
+      var m = fieldMeta(f);
+      var act = atCtx && atCtx.field === f ? " active" : "";
+      return '<div class="fm-item'+act+'" data-f="'+esc(f)+'">' +
+        '<span class="fm-ic">'+m.ic+'</span><span class="fm-txt"><b>'+esc(f)+'</b><i>'+m.type+'</i></span></div>';
+    }).join("");
+  list.innerHTML = html || '<div class="fm-item" style="cursor:default"><span class="fm-ic">∅</span><span class="fm-txt"><b>无匹配字段</b></span></div>';
+  list.querySelectorAll(".fm-item[data-f]").forEach(function(it){
+    it.addEventListener("click", function(){
+      if(!atCtx) return;
+      atCtx.field = it.dataset.f;
+      renderAutoColList($("acSearch").value);
+    });
+  });
+}
+
+/* 确定：写回 fields + titles（title 空则渲染时 fallback 字段名） */
+function applyAutoColumn(){
   var ctx = atCtx;
-  closeFieldDlg();
-  atCtx = null;
-  if(!ctx) return;
+  if(!ctx){ closeAutoColDlg(); return; }
+  var el = findElById(ctx.elId);
+  if(!el || el.type !== "autotable"){ closeAutoColDlg(); return; }
+  var field = ctx.field || FIELDS[0];
+  var title = (ctx.title || "").trim();
+  if(!field){ closeAutoColDlg(); return; }
+  var fs = el.props.fields ? el.props.fields.slice() : state.autoFields.slice();
+  var titles = el.props.titles ? el.props.titles.slice() : [];
+  if(ctx.col < 0){
+    fs.push(field); titles.length = fs.length - 1; titles.push(title);
+  } else {
+    fs[ctx.col] = field;
+    while(titles.length < fs.length) titles.push("");
+    titles[ctx.col] = title;
+  }
+  el.props.fields = fs;
+  el.props.titles = titles;
+  closeAutoColDlg();
+  commit(); renderContent(); saveState();
+}
+
+/* 删除此列（fields/titles 同步删；新增列模式无此按钮） */
+function deleteAutoCol(){
+  var ctx = atCtx;
+  if(!ctx || ctx.col < 0) return;
   var el = findElById(ctx.elId);
   if(!el || el.type !== "autotable") return;
-  var fs = (el.props.fields && el.props.fields.length) ? el.props.fields.slice() : state.autoFields.slice();
-  if(ctx.col < 0) fs.push(newField); else fs[ctx.col] = newField;
+  var fs = el.props.fields ? el.props.fields.slice() : state.autoFields.slice();
+  var titles = el.props.titles ? el.props.titles.slice() : [];
+  fs.splice(ctx.col, 1);
+  if(titles.length > ctx.col) titles.splice(ctx.col, 1);
   el.props.fields = fs;
+  el.props.titles = titles;
+  closeAutoColDlg();
   commit(); renderContent(); saveState();
 }
 

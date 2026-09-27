@@ -23,7 +23,8 @@ interface ElProps {
   content?: string; src?: string; fontSize?: number; bold?: boolean;
   align?: "left" | "center" | "right"; rows?: number; cols?: number;
   cells?: Record<string, Record<string, string>>;
-  fields?: string[]; // v1.1 自动表格列字段关联（per-element，fallback 全局 autoFields）
+  fields?: string[]; // v1.1 自动表格列字段关联（per-element，undefined 才 fallback 全局 autoFields）
+  titles?: string[]; // v1.3 列头自定义文字（空串渲染时 fallback 字段名）
 }
 interface LayoutEl { id: string; type: ElType; x: number; y: number; w: number; h: number; props: ElProps }
 interface Tpl { id: string; name: string; kind: "record" | "view"; elements: LayoutEl[] }
@@ -173,9 +174,9 @@ function fieldMeta(f: string, rec?: Record<string, string>): { ic: string; type:
   if (v !== "" && !isNaN(Number(v))) return { ic: "Σ", type: "数字" };
   return { ic: "A≡", type: "文本" };
 }
-/** v1.1 自动表格列字段来源：per-element props.fields 优先，fallback 全局 autoFields */
+/** v1.3 自动表格列字段来源：per-element props.fields（undefined 才 fallback；空数组=已删光显示空表） */
 function autoFieldsOf(el: LayoutEl, autoFields: string[]): string[] {
-  return el.props.fields && el.props.fields.length ? el.props.fields : autoFields;
+  return el.props.fields ? el.props.fields : autoFields;
 }
 function fieldExists(f: string, names: string[]): boolean {
   const m = f.match(/^SUM\((.+)\)$/);
@@ -334,7 +335,8 @@ export default function App() {
   const [dsSearch, setDsSearch] = useState("");
   const [loopOpen, setLoopOpen] = useState(false);
   const [fp, setFp] = useState<FpState | null>(null); // v1.1 输入【快速插入字段：光标处字段选择浮层
-  const [atCtx, setAtCtx] = useState<{ elId: string; col: number } | null>(null); // v1.1 自动表格列字段上下文（col=-1 新增列）
+  const [atCtx, setAtCtx] = useState<{ elId: string; col: number; field: string | null; title: string } | null>(null); // v1.3 编辑列上下文（col=-1 列尾新增）
+  const [acSearch, setAcSearch] = useState(""); // v1.3 编辑列对话框字段搜索
 
   const editorRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -587,25 +589,52 @@ export default function App() {
     setChipPop(null);
   }
 
-  /* ---------- v1.1 自动表格列字段关联 ---------- */
-  function openAutoFieldDlg(elId: string, col: number) {
-    setAtCtx({ elId, col });
-    setFieldSearch("");
-    setFieldDlgOpen(true);
+  /* ---------- v1.3 编辑自动表格列：列头文字自定义 + 关联字段选择 + 删除列 ---------- */
+  function openAutoColDlg(elId: string, col: number) {
+    const el = els.find((it) => it.id === elId);
+    if (!el || el.type !== "autotable") return;
+    const fs = autoFieldsOf(el, autoFields);
+    const titles = el.props.titles || [];
+    setAtCtx({ elId, col, field: col < 0 ? null : fs[col] || null, title: col < 0 ? "" : titles[col] || "" });
+    setAcSearch("");
   }
-  /** 更换/新增列的关联字段（col=-1 列尾新增），写回 per-element props.fields */
-  function applyAutoField(newField: string) {
+  /** 确定：写回 fields + titles（title 空则渲染时 fallback 字段名） */
+  function applyAutoColumn() {
     const ctx = atCtx;
-    setFieldDlgOpen(false);
-    setAtCtx(null);
-    if (!ctx) return;
+    if (!ctx) { setAtCtx(null); return; }
+    const field = ctx.field || fieldNames[0];
+    if (!field) { setAtCtx(null); return; }
+    const title = ctx.title.trim();
     mutateEls((list) => list.map((it) => {
       if (it.id !== ctx.elId || it.type !== "autotable") return it;
-      const fs = it.props.fields && it.props.fields.length ? [...it.props.fields] : [...autoFields];
-      if (ctx.col < 0) fs.push(newField);
-      else fs[ctx.col] = newField;
-      return { ...it, props: { ...it.props, fields: fs } };
+      const fs = it.props.fields ? [...it.props.fields] : [...autoFields];
+      const titles = it.props.titles ? [...it.props.titles] : [];
+      if (ctx.col < 0) {
+        fs.push(field);
+        while (titles.length < fs.length - 1) titles.push("");
+        titles.push(title);
+      } else {
+        fs[ctx.col] = field;
+        while (titles.length < fs.length) titles.push("");
+        titles[ctx.col] = title;
+      }
+      return { ...it, props: { ...it.props, fields: fs, titles } };
     }));
+    setAtCtx(null);
+  }
+  /** 删除此列（fields/titles 同步删；新增列模式无此按钮） */
+  function deleteAutoCol() {
+    const ctx = atCtx;
+    if (!ctx || ctx.col < 0) return;
+    mutateEls((list) => list.map((it) => {
+      if (it.id !== ctx.elId || it.type !== "autotable") return it;
+      const fs = it.props.fields ? [...it.props.fields] : [...autoFields];
+      const titles = it.props.titles ? [...it.props.titles] : [];
+      fs.splice(ctx.col, 1);
+      if (titles.length > ctx.col) titles.splice(ctx.col, 1);
+      return { ...it, props: { ...it.props, fields: fs, titles } };
+    }));
+    setAtCtx(null);
   }
 
   /* ---------- 自动保存 / 加载 ---------- */
@@ -835,26 +864,33 @@ export default function App() {
         );
       }
       case "autotable": {
-        /* v1.1 编辑态：数据行渲染字段 chip（点击更换整列关联字段），列尾＋新增字段列 */
+        /* v1.3 编辑态：列头可点击、数据行渲染字段 chip（点击进「编辑列」对话框），列尾＋新增 */
         const fs = autoFieldsOf(el, autoFields);
+        const titles = el.props.titles || [];
         const sample = records.slice(0, 2);
         return (
           <div className="content el-autotable">
             <table>
               <thead><tr>
-                {fs.map((f) => <th key={f}>{f}</th>)}
+                {fs.map((f, ci) => (
+                  <th key={f + "-" + ci} className="at-th" title="点击编辑列"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); openAutoColDlg(el.id, ci); }}>
+                    {titles[ci] || f}
+                  </th>
+                ))}
                 <th className="at-add" title="添加字段列"
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); openAutoFieldDlg(el.id, -1); }}>＋</th>
+                  onClick={(e) => { e.stopPropagation(); openAutoColDlg(el.id, -1); }}>＋</th>
               </tr></thead>
               <tbody>
                 {sample.map((rec, i) => (
                   <tr key={i}>
                     {fs.map((f, ci) => (
                       <td key={f + "-" + ci}>
-                        <span className="fld-chip chip-ok at-chip" title="点击更换关联字段"
+                        <span className="fld-chip chip-ok at-chip" title="点击编辑列"
                           onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => { e.stopPropagation(); openAutoFieldDlg(el.id, ci); }}>
+                          onClick={(e) => { e.stopPropagation(); openAutoColDlg(el.id, ci); }}>
                           {chipLabel(f)} <i className="chip-caret">⌄</i>
                         </span>
                       </td>
@@ -1395,7 +1431,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                       {el.type === "autotable" ? (
                         <div className="content el-autotable">
                           <table>
-                            <thead><tr>{autoFieldsOf(el, autoFields).map((f) => <th key={f}>{f}</th>)}</tr></thead>
+                            <thead><tr>{autoFieldsOf(el, autoFields).map((f, ci) => <th key={f + "-" + ci}>{el.props.titles?.[ci] || f}</th>)}</tr></thead>
                             <tbody>
                               {pg.rows.map((rec, r) => (
                                 <tr key={r}>{autoFieldsOf(el, autoFields).map((f) => <td key={f}>{rec.data[f] || ""}</td>)}</tr>
@@ -1539,7 +1575,7 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                 {el.type === "autotable" ? (
                   <div className="content el-autotable">
                     <table>
-                      <thead><tr>{autoFieldsOf(el, autoFields).map((f) => <th key={f}>{f}</th>)}</tr></thead>
+                      <thead><tr>{autoFieldsOf(el, autoFields).map((f, ci) => <th key={f + "-" + ci}>{el.props.titles?.[ci] || f}</th>)}</tr></thead>
                       <tbody>
                         {pg.rows.map((rec, r) => (
                           <tr key={r}>{autoFieldsOf(el, autoFields).map((f) => <td key={f}>{rec.data[f] || ""}</td>)}</tr>
@@ -1594,13 +1630,49 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   const v = records[0]?.data[f] || "";
                   const isNum = v !== "" && !isNaN(Number(v));
                   return (
-                    <div key={f} className="fm-item" onClick={() => { if (atCtx) applyAutoField(f); else applyFieldChange(f); }}>
+                    <div key={f} className="fm-item" onClick={() => applyFieldChange(f)}>
                       <span className="fm-ic">{isNum ? "#" : "T"}</span>
                       <span className="fm-txt"><b>{f}</b><i>{isNum ? "数字" : "文本"}</i></span>
                     </div>
                   );
                 });
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* v1.3 编辑自动表格列对话框 */}
+      {atCtx && (
+        <div className="modal-mask show">
+          <div className="modal field-modal">
+            <div className="fm-head"><span>编辑列</span><button className="fm-close" onClick={() => setAtCtx(null)}>✕</button></div>
+            <div className="fm-form">
+              <label>列头文字</label>
+              <input value={atCtx.title} placeholder="留空则显示字段名" autoFocus
+                onChange={(e) => setAtCtx({ ...atCtx, title: e.target.value })} />
+            </div>
+            <input className="fm-search" placeholder="搜索关联字段" value={acSearch} style={{ marginTop: 10 }}
+              onChange={(e) => setAcSearch(e.target.value)} />
+            <div className="fm-list">
+              {(() => {
+                const q = acSearch.trim().toLowerCase();
+                const list = fieldNames.filter((f) => !q || f.toLowerCase().includes(q));
+                if (!list.length) return <div className="fm-item" style={{ cursor: "default" }}><span className="fm-ic">∅</span><span className="fm-txt"><b>无匹配字段</b></span></div>;
+                return list.map((f) => {
+                  const m = fieldMeta(f, records[0]?.data);
+                  return (
+                    <div key={f} className={"fm-item" + (atCtx.field === f ? " active" : "")}
+                      onClick={() => setAtCtx({ ...atCtx, field: f })}>
+                      <span className="fm-ic">{m.ic}</span>
+                      <span className="fm-txt"><b>{f}</b><i>{m.type}</i></span>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+            <div className="fm-foot">
+              {atCtx.col >= 0 && <button className="fm-delcol" onClick={deleteAutoCol}>🗑 删除此列</button>}
+              <button className="fm-ok" onClick={applyAutoColumn}>确定</button>
             </div>
           </div>
         </div>
