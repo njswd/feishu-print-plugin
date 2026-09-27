@@ -129,6 +129,29 @@
   }
   .el.selected .drag-handle{display:flex;}
 
+  /* ===== v0.8 字段 chip 气泡 + 更换字段对话框 ===== */
+  .chip-pop{
+    position:absolute; z-index:40; display:flex; align-items:center; gap:4px;
+    background:#1f2329; color:#fff; border-radius:8px; padding:6px 8px;
+    box-shadow:0 4px 16px rgba(0,0,0,.25); white-space:nowrap;
+  }
+  .cp-name{font-size:12px; font-weight:600; margin-right:2px; max-width:180px; overflow:hidden; text-overflow:ellipsis;}
+  .cp-btn{border:none; background:rgba(255,255,255,.14); color:#fff; font-size:11.5px; padding:3px 8px; border-radius:5px; cursor:pointer;}
+  .cp-btn:hover{background:rgba(255,255,255,.28);}
+  .fld-chip{cursor:pointer;}
+  .field-modal{width:420px; padding:0; overflow:hidden;}
+  .fm-head{display:flex; align-items:center; justify-content:center; position:relative; padding:14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);}
+  .fm-close{position:absolute; right:12px; top:11px; border:none; background:none; font-size:14px; cursor:pointer; color:var(--sub);}
+  .fm-close:hover{color:var(--ink);}
+  .fm-search{display:block; width:calc(100% - 32px); margin:12px 16px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;}
+  .fm-list{max-height:380px; overflow-y:auto; padding-bottom:8px;}
+  .fm-item{display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer;}
+  .fm-item:hover{background:var(--card);}
+  .fm-ic{width:22px; text-align:center; font-size:15px; color:var(--sub);}
+  .fm-txt{display:flex; flex-direction:column; line-height:1.4;}
+  .fm-txt b{font-size:13.5px; font-weight:500;}
+  .fm-txt i{font-style:normal; font-size:11px; color:#a0a6b0;}
+
   /* ===== 编辑模式左侧 ===== */
   .ed-sec{padding:0 12px;}
   .sec-title{font-size:12px; color:var(--sub); margin:12px 0 6px; font-weight:600;}
@@ -169,7 +192,7 @@
     .paper-label{display:none;}
     .el{outline:none !important;}
     .resize-handle{display:none !important;}
-    .float-bar, .drag-handle{display:none !important;}
+    .float-bar, .drag-handle, .chip-pop{display:none !important;}
     @page{margin:0;}
   }
 </style>
@@ -194,6 +217,15 @@
       <button class="clear" onclick="closeSign()">取 消</button>
       <button class="ok" onclick="saveSign()">确 认</button>
     </div>
+  </div>
+</div>
+
+<!-- 更换字段对话框 -->
+<div class="modal-mask" id="fieldModal">
+  <div class="modal field-modal">
+    <div class="fm-head"><span>更换字段</span><button class="fm-close" onclick="closeFieldDlg()">✕</button></div>
+    <input class="fm-search" id="fieldSearch" placeholder="搜索字段" oninput="renderFieldList(this.value)">
+    <div class="fm-list" id="fieldList"></div>
   </div>
 </div>
 
@@ -756,6 +788,7 @@ function exportHtml(){
  * 内容区
  * ===================================================================== */
 function renderContent(){
+  removeChipPop();
   var c = $("content");
   if(state.view === "preview"){
     c.innerHTML = '<div id="previewArea"></div>';
@@ -1143,6 +1176,140 @@ function saveSign(){
   c.addEventListener("pointermove", function(e){ if(!drawing) return; var p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); });
   c.addEventListener("pointerup", function(){ drawing=false; });
 })();
+
+/* =====================================================================
+ * v0.8 字段 chip 气泡 + 更换字段对话框
+ * ===================================================================== */
+var chipCtx = { elId:null, raw:null };
+var chipPopEl = null;
+
+function removeChipPop(){ if(chipPopEl){ chipPopEl.remove(); chipPopEl = null; } }
+
+function fieldMeta(name){
+  var v = RECORDS[0] ? RECORDS[0][name] : undefined;
+  var isNum = v !== undefined && v !== null && v !== "" && !isNaN(+v);
+  return { icon: isNum ? "#" : "T", type: isNum ? "数字" : "文本" };
+}
+
+/* 捕获阶段拦截：点 chip / 气泡时不触发元素拖动 */
+document.addEventListener("mousedown", function(e){
+  var chip = e.target.closest ? e.target.closest(".fld-chip") : null;
+  if(chip || (chipPopEl && chipPopEl.contains(e.target))) e.stopPropagation();
+}, true);
+
+document.addEventListener("click", function(e){
+  var chip = e.target.closest ? e.target.closest(".fld-chip") : null;
+  if(chip){
+    e.stopPropagation(); e.preventDefault();
+    var elDiv = chip.closest(".el");
+    if(!elDiv) return;
+    chipCtx = { elId: elDiv.dataset.id, raw: chip.getAttribute("data-raw") || chip.textContent.trim() };
+    state.selectedId = chipCtx.elId;
+    document.querySelectorAll(".el.selected").forEach(function(n){ n.classList.remove("selected"); });
+    elDiv.classList.add("selected");
+    buildFloatBar(); renderProps();
+    showChipPop(chip);
+    return;
+  }
+  if(chipPopEl && !chipPopEl.contains(e.target)) removeChipPop();
+});
+
+function showChipPop(chip){
+  removeChipPop();
+  var pop = document.createElement("div");
+  pop.className = "chip-pop";
+  pop.innerHTML =
+    '<span class="cp-name" title="'+esc(chipLabel(chipCtx.raw))+'">'+esc(chipLabel(chipCtx.raw))+'</span>' +
+    '<button class="cp-btn" data-act="change">更改</button>' +
+    '<button class="cp-btn" data-act="del">删除</button>';
+  document.body.appendChild(pop);
+  var r = chip.getBoundingClientRect();
+  var pr = pop.getBoundingClientRect();
+  var left = r.left + window.scrollX;
+  var maxLeft = window.scrollX + document.documentElement.clientWidth - pr.width - 8;
+  pop.style.left = Math.max(4, Math.min(left, maxLeft)) + "px";
+  pop.style.top = (r.bottom + window.scrollY + 6) + "px";
+  chipPopEl = pop;
+  pop.addEventListener("click", function(ev){
+    ev.stopPropagation();
+    var btn = ev.target.closest(".cp-btn");
+    if(!btn) return;
+    if(btn.dataset.act === "change") openFieldDlg();
+    else if(btn.dataset.act === "del") deleteChip();
+  });
+}
+
+function findElById(id){
+  var found = null;
+  els().forEach(function(x){ if(x.id === id) found = x; });
+  return found;
+}
+/* 遍历元素内所有文本值（content + 表格单元格） */
+function eachTextValue(el, fn){
+  if(TEXT_LIKE.indexOf(el.type) >= 0 && typeof el.props.content === "string") fn("content");
+  if(el.type === "table" && el.props.cells){
+    Object.keys(el.props.cells).forEach(function(r){
+      Object.keys(el.props.cells[r]).forEach(function(c){
+        if(typeof el.props.cells[r][c] === "string") fn("cell", r, c);
+      });
+    });
+  }
+}
+function openFieldDlg(){
+  removeChipPop();
+  $("fieldSearch").value = "";
+  renderFieldList("");
+  $("fieldModal").classList.add("show");
+}
+function closeFieldDlg(){ $("fieldModal").classList.remove("show"); }
+
+function renderFieldList(q){
+  var list = $("fieldList");
+  if(!list) return;
+  q = (q || "").trim().toLowerCase();
+  var html = FIELDS.filter(function(f){ return !q || f.toLowerCase().indexOf(q) >= 0; })
+    .map(function(f){
+      var m = fieldMeta(f);
+      return '<div class="fm-item" data-f="'+esc(f)+'">' +
+        '<span class="fm-ic">'+m.icon+'</span>' +
+        '<span class="fm-txt"><b>'+esc(f)+'</b><i>'+m.type+'</i></span></div>';
+    }).join("");
+  list.innerHTML = html || '<div class="fm-item" style="cursor:default"><span class="fm-ic">∅</span><span class="fm-txt"><b>无匹配字段</b></span></div>';
+  list.querySelectorAll(".fm-item[data-f]").forEach(function(it){
+    it.addEventListener("click", function(){ applyFieldChange(it.dataset.f); });
+  });
+}
+
+function applyFieldChange(newField){
+  closeFieldDlg();
+  var el = findElById(chipCtx.elId);
+  if(!el || !chipCtx.raw) return;
+  var tokenOld = "{{" + chipCtx.raw + "}}";
+  var tokenNew = /^SUM\(/.test(chipCtx.raw) ? "{{SUM(" + newField + ")}}" : "{{" + newField + "}}";
+  var changed = false;
+  eachTextValue(el, function(kind, r, c){
+    var v = kind === "content" ? el.props.content : el.props.cells[r][c];
+    if(v.indexOf(tokenOld) < 0) return;
+    v = v.split(tokenOld).join(tokenNew);
+    if(kind === "content") el.props.content = v; else el.props.cells[r][c] = v;
+    changed = true;
+  });
+  if(changed){ commit(); renderContent(); saveState(); }
+}
+
+function deleteChip(){
+  var el = findElById(chipCtx.elId);
+  removeChipPop();
+  if(!el || !chipCtx.raw) return;
+  var token = "{{" + chipCtx.raw + "}}";
+  eachTextValue(el, function(kind, r, c){
+    var v = kind === "content" ? el.props.content : el.props.cells[r][c];
+    if(v.indexOf(token) < 0) return;
+    v = v.split(token).join("");
+    if(kind === "content") el.props.content = v; else el.props.cells[r][c] = v;
+  });
+  commit(); renderContent(); saveState();
+}
 
 /* =====================================================================
  * 打印 & 总渲染

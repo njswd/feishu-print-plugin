@@ -236,6 +236,9 @@ export default function App() {
   const [alignPop, setAlignPop] = useState(false);
   const [posPop, setPosPop] = useState(false);
   const [signFor, setSignFor] = useState<string | null>(null);
+  const [chipPop, setChipPop] = useState<{ elId: string; raw: string; x: number; y: number } | null>(null); // v0.8 chip 气泡
+  const [fieldDlgOpen, setFieldDlgOpen] = useState(false); // v0.8 更换字段对话框
+  const [fieldSearch, setFieldSearch] = useState("");
   const [paper, setPaper] = useState("A4");
   const [landscape, setLandscape] = useState(false);
   const [margin, setMargin] = useState(15);
@@ -360,6 +363,58 @@ export default function App() {
     } else { setPosPop(true); setAlignPop(false); }
   }
 
+  /* ---------- 字段 chip 气泡 + 更换字段对话框（v0.8）---------- */
+  useEffect(() => { setChipPop(null); }, [view, currentTpl]);
+  function handleChipClick(chip: HTMLElement, elId: string) {
+    const r = chip.getBoundingClientRect();
+    const pref = editorRef.current?.getBoundingClientRect();
+    setSelectedId(elId);
+    setAlignPop(false); setPosPop(false);
+    setChipPop({
+      elId,
+      raw: (chip.dataset.raw || chip.textContent || "").trim(),
+      x: Math.max(4, Math.min(pref ? r.left - pref.left : 4, paperW * MM - 240)),
+      y: pref ? r.bottom - pref.top + 6 : 0,
+    });
+  }
+  /** 元素内所有文本值的 token 替换/删除（content + 表格单元格） */
+  function replaceToken(list: LayoutEl[], elId: string, tokenOld: string, tokenNew: string): LayoutEl[] {
+    return list.map((it) => {
+      if (it.id !== elId) return it;
+      const p = { ...it.props };
+      if (typeof p.content === "string" && p.content.includes(tokenOld)) {
+        p.content = p.content.split(tokenOld).join(tokenNew);
+      }
+      if (it.type === "table" && p.cells) {
+        const cells: ElProps["cells"] = {};
+        Object.keys(p.cells).forEach((r) => {
+          const row = { ...p.cells![r] };
+          Object.keys(row).forEach((c) => {
+            const v = row[c];
+            if (typeof v === "string" && v.includes(tokenOld)) row[c] = v.split(tokenOld).join(tokenNew);
+          });
+          cells[r] = row;
+        });
+        p.cells = cells;
+      }
+      return { ...it, props: p };
+    });
+  }
+  function applyFieldChange(newField: string) {
+    setFieldDlgOpen(false);
+    if (!chipPop) return;
+    const tokenOld = "{{" + chipPop.raw + "}}";
+    const tokenNew = /^SUM\(/.test(chipPop.raw) ? "{{SUM(" + newField + ")}}" : "{{" + newField + "}}";
+    mutateEls((list) => replaceToken(list, chipPop.elId, tokenOld, tokenNew));
+    setChipPop(null);
+  }
+  function chipDelete() {
+    if (!chipPop) return;
+    const token = "{{" + chipPop.raw + "}}";
+    mutateEls((list) => replaceToken(list, chipPop.elId, token, ""));
+    setChipPop(null);
+  }
+
   /* ---------- 自动保存 / 加载 ---------- */
   useEffect(() => {
     try {
@@ -465,6 +520,7 @@ export default function App() {
 
   function startDrag(e: React.MouseEvent, el: LayoutEl, kind: "move" | "resize") {
     e.stopPropagation();
+    setChipPop(null);
     if (kind === "move") setSelectedId(el.id);
     const startX = e.clientX, startY = e.clientY;
     const ox = el.x, oy = el.y, ow = el.w, oh = el.h;
@@ -510,7 +566,11 @@ export default function App() {
                   document.querySelector<HTMLElement>('.el[data-id="' + el.id + '"] [contenteditable]')?.focus();
                 }, 0);
               }}
-              onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
+              onMouseDown={(e) => { if (editing || (e.target as HTMLElement).closest(".fld-chip")) e.stopPropagation(); }}
+              onClick={(e) => {
+                const chip = (e.target as HTMLElement).closest(".fld-chip") as HTMLElement | null;
+                if (chip) { e.stopPropagation(); handleChipClick(chip, el.id); }
+              }}
               onBlur={(e) => { updateProps(el.id, { content: richToRaw(e.currentTarget) }); setEditingKey(null); }} />
           );
         }
@@ -550,7 +610,11 @@ export default function App() {
                             document.querySelector<HTMLElement>('.el[data-id="' + el.id + '"] td[data-cell="' + (r + "-" + c) + '"]')?.focus();
                           }, 0);
                         }}
-                        onMouseDown={(e) => { if (editingKey === cellKey) e.stopPropagation(); }}
+                        onMouseDown={(e) => { if (editingKey === cellKey || (e.target as HTMLElement).closest(".fld-chip")) e.stopPropagation(); }}
+                        onClick={(e) => {
+                          const chip = (e.target as HTMLElement).closest(".fld-chip") as HTMLElement | null;
+                          if (chip) { e.stopPropagation(); handleChipClick(chip, el.id); }
+                        }}
                         onBlur={(e) => {
                           const cells = { ...(p.cells || {}) };
                           cells[r] = { ...(cells[r] || {}), [c]: richToRaw(e.currentTarget) };
@@ -1044,6 +1108,14 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   </div>
                 </div>
               )}
+              {chipPop && (
+                <div className="chip-pop" style={{ left: chipPop.x + "px", top: chipPop.y + "px" }}
+                  onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                  <span className="cp-name" title={chipLabel(chipPop.raw)}>{chipLabel(chipPop.raw)}</span>
+                  <button className="cp-btn" onClick={() => { setFieldDlgOpen(true); setFieldSearch(""); }}>更改</button>
+                  <button className="cp-btn" onClick={chipDelete}>删除</button>
+                </div>
+              )}
               </div>
             </>
           )}
@@ -1095,6 +1167,34 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                 updateProps(signFor, { src });
                 setSignFor(null);
               }}>确 认</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 更换字段对话框（v0.8） */}
+      {fieldDlgOpen && (
+        <div className="modal-mask show">
+          <div className="modal field-modal">
+            <div className="fm-head"><span>更换字段</span><button className="fm-close" onClick={() => setFieldDlgOpen(false)}>✕</button></div>
+            <input className="fm-search" autoFocus placeholder="搜索字段" value={fieldSearch}
+              onChange={(e) => setFieldSearch(e.target.value)} />
+            <div className="fm-list">
+              {(() => {
+                const q = fieldSearch.trim().toLowerCase();
+                const list = fieldNames.filter((f) => !q || f.toLowerCase().includes(q));
+                if (!list.length) return <div className="fm-item" style={{ cursor: "default" }}><span className="fm-ic">∅</span><span className="fm-txt"><b>无匹配字段</b></span></div>;
+                return list.map((f) => {
+                  const v = records[0]?.data[f] || "";
+                  const isNum = v !== "" && !isNaN(Number(v));
+                  return (
+                    <div key={f} className="fm-item" onClick={() => applyFieldChange(f)}>
+                      <span className="fm-ic">{isNum ? "#" : "T"}</span>
+                      <span className="fm-txt"><b>{f}</b><i>{isNum ? "数字" : "文本"}</i></span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>
