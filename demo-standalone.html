@@ -148,13 +148,15 @@
 
   /* ===== v0.8 字段 chip 气泡 + 更换字段对话框 ===== */
   .chip-pop{
-    position:absolute; z-index:40; display:flex; align-items:center; gap:4px;
+    position:absolute; z-index:40; display:flex; align-items:center; gap:4px; flex-wrap:wrap;
     background:#1f2329; color:#fff; border-radius:8px; padding:6px 8px;
     box-shadow:0 4px 16px rgba(0,0,0,.25); white-space:nowrap;
   }
   .cp-name{font-size:12px; font-weight:600; margin-right:2px; max-width:180px; overflow:hidden; text-overflow:ellipsis;}
   .cp-btn{border:none; background:rgba(255,255,255,.14); color:#fff; font-size:11.5px; padding:3px 8px; border-radius:5px; cursor:pointer;}
   .cp-btn:hover{background:rgba(255,255,255,.28);}
+  /* v1.4 自动表格 chip 气泡：字段状态警告行 */
+  .atp-warn{flex-basis:100%; font-size:11px; color:#ffb84d; padding-top:2px; white-space:normal;}
   .fld-chip{cursor:pointer;}
   /* v0.9 字段 chip 数据关联状态：蓝=可取数，红=取不到 */
   .fld-chip.chip-ok{border-color:#3370ff; color:#3370ff; background:#f0f6ff;}
@@ -1162,6 +1164,7 @@ function exportHtml(){
  * ===================================================================== */
 function renderContent(){
   removeChipPop();
+  removeAtPop();
   fpClose();
   var c = $("content");
   if(state.view === "preview"){
@@ -1575,12 +1578,21 @@ document.addEventListener("mousedown", function(e){
   var chip = e.target.closest ? e.target.closest(".fld-chip") : null;
   var atAdd = e.target.closest ? e.target.closest(".at-add") : null;
   var atTh = e.target.closest ? e.target.closest(".at-th") : null;
-  if(chip || atAdd || atTh || (chipPopEl && chipPopEl.contains(e.target))) e.stopPropagation();
+  if(chip || atAdd || atTh || (chipPopEl && chipPopEl.contains(e.target)) || (atPopEl && atPopEl.contains(e.target))) e.stopPropagation();
 }, true);
 
 document.addEventListener("click", function(e){
-  /* v1.3 自动表格列头（at-th）/ 数据行字段 chip（at-chip）/ 列尾＋ → 编辑列对话框 */
-  var atEl = e.target.closest ? e.target.closest(".at-th,.at-chip,.at-add") : null;
+  /* v1.4 自动表格数据行字段 chip（at-chip）→ 轻量气泡：[字段名]+更换/删除此列 */
+  var atChip = e.target.closest ? e.target.closest(".at-chip") : null;
+  if(atChip){
+    e.stopPropagation(); e.preventDefault();
+    var cDiv = atChip.closest(".el");
+    if(cDiv) state.selectedId = cDiv.dataset.id;
+    showAtPop(atChip);
+    return;
+  }
+  /* v1.3 列头（at-th）/列尾＋（at-add）→ 编辑列对话框 */
+  var atEl = e.target.closest ? e.target.closest(".at-th,.at-add") : null;
   if(atEl){
     e.stopPropagation(); e.preventDefault();
     var atDiv = atEl.closest(".el");
@@ -1607,6 +1619,7 @@ document.addEventListener("click", function(e){
     return;
   }
   if(chipPopEl && !chipPopEl.contains(e.target)) removeChipPop();
+  if(atPopEl && !atPopEl.contains(e.target)) removeAtPop();
 });
 
 function showChipPop(chip){
@@ -1766,20 +1779,63 @@ function applyAutoColumn(){
   commit(); renderContent(); saveState();
 }
 
-/* 删除此列（fields/titles 同步删；新增列模式无此按钮） */
+/* 删除列（fields/titles 同步删）——对话框「删除此列」与 chip 气泡「🗑」共用 */
+function deleteColAt(elId, col){
+  var el = findElById(elId);
+  if(!el || el.type !== "autotable" || col < 0) return;
+  var fs = el.props.fields ? el.props.fields.slice() : state.autoFields.slice();
+  var titles = el.props.titles ? el.props.titles.slice() : [];
+  fs.splice(col, 1);
+  if(titles.length > col) titles.splice(col, 1);
+  el.props.fields = fs;
+  el.props.titles = titles;
+  commit(); renderContent(); saveState();
+}
 function deleteAutoCol(){
   var ctx = atCtx;
   if(!ctx || ctx.col < 0) return;
-  var el = findElById(ctx.elId);
-  if(!el || el.type !== "autotable") return;
-  var fs = el.props.fields ? el.props.fields.slice() : state.autoFields.slice();
-  var titles = el.props.titles ? el.props.titles.slice() : [];
-  fs.splice(ctx.col, 1);
-  if(titles.length > ctx.col) titles.splice(ctx.col, 1);
-  el.props.fields = fs;
-  el.props.titles = titles;
+  deleteColAt(ctx.elId, ctx.col);
   closeAutoColDlg();
-  commit(); renderContent(); saveState();
+}
+
+/* ===== v1.4 自动表格单元格 chip 气泡（对齐官方：[字段名] + 状态警告 + 更换/删除） ===== */
+var atPopEl = null, atPopCtx = null;
+function removeAtPop(){ if(atPopEl){ atPopEl.remove(); atPopEl = null; } atPopCtx = null; }
+function showAtPop(chip){
+  removeAtPop(); removeChipPop();
+  var elDiv = chip.closest(".el");
+  if(!elDiv) return;
+  var col = parseInt(chip.getAttribute("data-col"), 10);
+  if(isNaN(col)) return;
+  var el = findElById(elDiv.dataset.id);
+  if(!el || el.type !== "autotable") return;
+  atPopCtx = { elId: elDiv.dataset.id, col: col };
+  var fs = autoFieldsOf(el);
+  var fname = fs[col] || "";
+  var ok = FIELDS.indexOf(fname) >= 0;
+  var pop = document.createElement("div");
+  pop.className = "chip-pop";
+  pop.innerHTML =
+    '<span class="cp-name" title="'+esc(fname)+'">['+esc(fname)+']</span>' +
+    '<button class="cp-btn" data-act="change">更换</button>' +
+    '<button class="cp-btn" data-act="del" title="删除此列">🗑</button>' +
+    (ok ? "" : '<div class="atp-warn">字段改名或被删除</div>');
+  document.body.appendChild(pop);
+  var r = chip.getBoundingClientRect();
+  var pr = pop.getBoundingClientRect();
+  var left = r.left + window.scrollX;
+  var maxLeft = window.scrollX + document.documentElement.clientWidth - pr.width - 8;
+  pop.style.left = Math.max(4, Math.min(left, maxLeft)) + "px";
+  pop.style.top = (r.bottom + window.scrollY + 6) + "px";
+  atPopEl = pop;
+  pop.addEventListener("click", function(ev){
+    ev.stopPropagation();
+    var btn = ev.target.closest(".cp-btn");
+    if(!btn || !atPopCtx) return;
+    var c = atPopCtx;
+    if(btn.dataset.act === "change"){ removeAtPop(); openAutoColDlg(c.elId, c.col); }
+    else if(btn.dataset.act === "del"){ removeAtPop(); deleteColAt(c.elId, c.col); }
+  });
 }
 
 function deleteChip(){

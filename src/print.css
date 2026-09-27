@@ -147,7 +147,7 @@
 
 /* ---------- v0.8 字段 chip 气泡 + 更换字段对话框 ---------- */
 .chip-pop {
-  position: absolute; z-index: 40; display: flex; align-items: center; gap: 4px;
+  position: absolute; z-index: 40; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
   background: #1f2329; color: #fff; border-radius: 8px; padding: 6px 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .25); white-space: nowrap;
 }
@@ -157,6 +157,8 @@
   font-size: 11.5px; padding: 3px 8px; border-radius: 5px; cursor: pointer;
 }
 .cp-btn:hover { background: rgba(255, 255, 255, .28); }
+/* v1.4 自动表格 chip 气泡：字段状态警告行 */
+.atp-warn { flex-basis: 100%; font-size: 11px; color: #ffb84d; padding-top: 2px; white-space: normal; }
 .fld-chip { cursor: pointer; }
 /* v0.9 字段 chip 数据关联状态：蓝=可取数，红=取不到 */
 .fld-chip.chip-ok { border-color: #3370ff; color: #3370ff; background: #f0f6ff; }

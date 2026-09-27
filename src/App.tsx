@@ -337,6 +337,7 @@ export default function App() {
   const [fp, setFp] = useState<FpState | null>(null); // v1.1 输入【快速插入字段：光标处字段选择浮层
   const [atCtx, setAtCtx] = useState<{ elId: string; col: number; field: string | null; title: string } | null>(null); // v1.3 编辑列上下文（col=-1 列尾新增）
   const [acSearch, setAcSearch] = useState(""); // v1.3 编辑列对话框字段搜索
+  const [atPop, setAtPop] = useState<{ elId: string; col: number; field: string; ok: boolean; x: number; y: number } | null>(null); // v1.4 自动表格 chip 气泡
 
   const editorRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -538,7 +539,7 @@ export default function App() {
   }
 
   /* ---------- 字段 chip 气泡 + 更换字段对话框（v0.8）---------- */
-  useEffect(() => { setChipPop(null); }, [view, currentTpl]);
+  useEffect(() => { setChipPop(null); setAtPop(null); }, [view, currentTpl]);
   function handleChipClick(chip: HTMLElement, elId: string) {
     const r = chip.getBoundingClientRect();
     const pref = editorRef.current?.getBoundingClientRect();
@@ -547,6 +548,22 @@ export default function App() {
     setChipPop({
       elId,
       raw: (chip.dataset.raw || chip.textContent || "").trim(),
+      x: Math.max(4, Math.min(pref ? r.left - pref.left : 4, paperW * MM - 240)),
+      y: pref ? r.bottom - pref.top + 6 : 0,
+    });
+  }
+  /* v1.4 自动表格单元格 chip 气泡（对齐官方：[字段名] + 状态警告 + 更换/删除此列） */
+  function handleAtChipClick(chip: HTMLElement, elId: string, col: number) {
+    const el = els.find((it) => it.id === elId);
+    if (!el || el.type !== "autotable") return;
+    const fs = autoFieldsOf(el, autoFields);
+    const fname = fs[col] || "";
+    const r = chip.getBoundingClientRect();
+    const pref = editorRef.current?.getBoundingClientRect();
+    setSelectedId(elId);
+    setAlignPop(false); setPosPop(false);
+    setAtPop({
+      elId, col, field: fname, ok: fieldNames.includes(fname),
       x: Math.max(4, Math.min(pref ? r.left - pref.left : 4, paperW * MM - 240)),
       y: pref ? r.bottom - pref.top + 6 : 0,
     });
@@ -622,18 +639,22 @@ export default function App() {
     }));
     setAtCtx(null);
   }
-  /** 删除此列（fields/titles 同步删；新增列模式无此按钮） */
+  /** 删除列（fields/titles 同步删）——对话框「删除此列」与 chip 气泡「🗑」共用 */
+  function deleteColAt(elId: string, col: number) {
+    if (col < 0) return;
+    mutateEls((list) => list.map((it) => {
+      if (it.id !== elId || it.type !== "autotable") return it;
+      const fs = it.props.fields ? [...it.props.fields] : [...autoFields];
+      const titles = it.props.titles ? [...it.props.titles] : [];
+      fs.splice(col, 1);
+      if (titles.length > col) titles.splice(col, 1);
+      return { ...it, props: { ...it.props, fields: fs, titles } };
+    }));
+  }
   function deleteAutoCol() {
     const ctx = atCtx;
     if (!ctx || ctx.col < 0) return;
-    mutateEls((list) => list.map((it) => {
-      if (it.id !== ctx.elId || it.type !== "autotable") return it;
-      const fs = it.props.fields ? [...it.props.fields] : [...autoFields];
-      const titles = it.props.titles ? [...it.props.titles] : [];
-      fs.splice(ctx.col, 1);
-      if (titles.length > ctx.col) titles.splice(ctx.col, 1);
-      return { ...it, props: { ...it.props, fields: fs, titles } };
-    }));
+    deleteColAt(ctx.elId, ctx.col);
     setAtCtx(null);
   }
 
@@ -748,6 +769,7 @@ export default function App() {
   function startDrag(e: React.MouseEvent, el: LayoutEl, kind: "move" | "resize") {
     e.stopPropagation();
     setChipPop(null);
+    setAtPop(null);
     if (kind === "move") setSelectedId(el.id);
     const startX = e.clientX, startY = e.clientY;
     const ox = el.x, oy = el.y, ow = el.w, oh = el.h;
@@ -888,9 +910,9 @@ export default function App() {
                   <tr key={i}>
                     {fs.map((f, ci) => (
                       <td key={f + "-" + ci}>
-                        <span className="fld-chip chip-ok at-chip" title="点击编辑列"
+                        <span className="fld-chip chip-ok at-chip" title="点击更换或删除此列"
                           onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => { e.stopPropagation(); openAutoColDlg(el.id, ci); }}>
+                          onClick={(e) => { e.stopPropagation(); handleAtChipClick(e.currentTarget, el.id, ci); }}>
                           {chipLabel(f)} <i className="chip-caret">⌄</i>
                         </span>
                       </td>
@@ -1555,6 +1577,16 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                   <span className="cp-name" title={chipLabel(chipPop.raw)}>{chipLabel(chipPop.raw)}</span>
                   <button className="cp-btn" onClick={() => { setFieldDlgOpen(true); setFieldSearch(""); }}>更改</button>
                   <button className="cp-btn" onClick={chipDelete}>删除</button>
+                </div>
+              )}
+              {/* v1.4 自动表格单元格 chip 气泡：[字段名] + 状态警告 + 更换/删除此列 */}
+              {atPop && (
+                <div className="chip-pop" style={{ left: atPop.x + "px", top: atPop.y + "px" }}
+                  onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                  <span className="cp-name" title={atPop.field}>[{atPop.field}]</span>
+                  <button className="cp-btn" onClick={() => { const p = atPop; setAtPop(null); if (p) openAutoColDlg(p.elId, p.col); }}>更换</button>
+                  <button className="cp-btn" title="删除此列" onClick={() => { const p = atPop; setAtPop(null); if (p) deleteColAt(p.elId, p.col); }}>🗑</button>
+                  {!atPop.ok && <div className="atp-warn">字段改名或被删除</div>}
                 </div>
               )}
               </div>
