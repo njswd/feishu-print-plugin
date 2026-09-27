@@ -178,6 +178,51 @@ function fieldMeta(f: string, rec?: Record<string, string>): { ic: string; type:
 function autoFieldsOf(el: LayoutEl, autoFields: string[]): string[] {
   return el.props.fields ? el.props.fields : autoFields;
 }
+/* ---------- v1.5 自动排版：重叠检测 + 流式重排（不允许堆叠） ---------- */
+function rectsOverlap(a: LayoutEl, b: LayoutEl): boolean {
+  return a.x < b.x + b.w - 0.5 && a.x + a.w > b.x + 0.5 &&
+         a.y < b.y + b.h - 0.5 && a.y + a.h > b.y + 0.5;
+}
+function hasOverlapEls(list: LayoutEl[]): boolean {
+  const items = list.filter((e) => e.type !== "line");
+  for (let i = 0; i < items.length; i++)
+    for (let j = i + 1; j < items.length; j++)
+      if (rectsOverlap(items[i], items[j])) return true;
+  return false;
+}
+/** mode: wrap=行式装箱装不下换行；cols2=双列贪心（宽于半列的元素独占整行）；返回新数组不改原数据 */
+function reflowEls(list: LayoutEl[], mode: string, areaW: number): LayoutEl[] {
+  const gap = 3;
+  const items = list.filter((e) => e.type !== "line").sort((p, q) => p.y - q.y || p.x - q.x);
+  const pos = new Map<string, { x: number; y: number }>();
+  if (mode === "cols2") {
+    const half = (areaW - gap) / 2;
+    const colY = [0, 0];
+    items.forEach((e) => {
+      if (e.w > half + 1) {
+        const yMax = Math.max(colY[0], colY[1]);
+        pos.set(e.id, { x: 0, y: yMax });
+        colY[0] = colY[1] = yMax + e.h + gap;
+      } else {
+        const c = colY[0] <= colY[1] ? 0 : 1;
+        pos.set(e.id, { x: c ? half + gap : 0, y: colY[c] });
+        colY[c] += e.h + gap;
+      }
+    });
+  } else {
+    let curX = 0, curY = 0, rowH = 0;
+    items.forEach((e) => {
+      if (curX > 0 && curX + e.w > areaW + 0.5) { curY += rowH + gap; curX = 0; rowH = 0; }
+      pos.set(e.id, { x: curX, y: curY });
+      curX += e.w + gap;
+      rowH = Math.max(rowH, e.h);
+    });
+  }
+  return list.map((e) => {
+    const p = pos.get(e.id);
+    return p ? { ...e, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : e;
+  });
+}
 function fieldExists(f: string, names: string[]): boolean {
   const m = f.match(/^SUM\((.+)\)$/);
   const name = (m ? m[1] : f).trim();
@@ -329,7 +374,7 @@ export default function App() {
   const [margins, setMargins] = useState({ t: 15, r: 15, b: 15, l: 15 }); // v1.0 四边边距(mm)
   const [perPage, setPerPage] = useState(8);
   const [editPanel, setEditPanel] = useState<"comp" | "data" | "page" | "setting" | "inspector">("comp"); // v1.0 侧栏面板
-  const [pgSet, setPgSet] = useState({ rotate: "default", continuous: false, hfShow: false, hfGap: 2.82, mirror: false, hideFirst: false });
+  const [pgSet, setPgSet] = useState({ rotate: "default", continuous: false, hfShow: false, hfGap: 2.82, mirror: false, hideFirst: false, layoutMode: "off" });
   const [appSet, setAppSet] = useState({ fontPt: 10, lineHeight: 1.5, paraGap: 0, wmMode: "text", wmText: "" });
   const [dsTab, setDsTab] = useState<"field" | "sys">("field");
   const [dsSearch, setDsSearch] = useState("");
@@ -761,7 +806,12 @@ export default function App() {
       w: d.w, h: d.h, props: JSON.parse(JSON.stringify(d.props)),
     };
     if (TEXT_LIKE.includes(el.type) && el.props.fontSize) el.props.fontSize = defPx;
-    mutateEls((list) => [...list, el]);
+    mutateEls((list) => {
+      const next = [...list, el];
+      /* v1.5 拖入元素与现有元素重叠时自动重排 */
+      const mode = pgSet.layoutMode;
+      return mode && mode !== "off" && hasOverlapEls(next) ? reflowEls(next, mode, innerArea().w) : next;
+    });
     setSelectedId(el.id);
     dragType.current = null;
   }
@@ -786,7 +836,13 @@ export default function App() {
     function onUp() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      if (last) commit(last);
+      if (last) {
+        /* v1.5 拖动/缩放结束后重叠自动重排 */
+        const mode = pgSet.layoutMode;
+        const next = mode && mode !== "off" && hasOverlapEls(last) ? reflowEls(last, mode, innerArea().w) : last;
+        setEls(next);
+        commit(next);
+      }
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -1130,6 +1186,15 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                         <div style={{ padding: "5px 0" }}>
                           <label className="sw"><input type="checkbox" checked={pgSet.continuous} onChange={(e) => setPgSet({ ...pgSet, continuous: e.target.checked })} /><i></i></label>
                         </div></div>
+                    </div>
+                    {/* v1.5 自动排版：控件重叠时不允许堆叠，自动换行或排成双列 */}
+                    <div className="ps-sec">自动排版</div>
+                    <div className="ps-grid">
+                      <div><label>堆叠处理 ⓘ</label>
+                        <select value={pgSet.layoutMode || "off"} onChange={(e) => setPgSet({ ...pgSet, layoutMode: e.target.value })}>
+                          <option value="off">不重排</option><option value="wrap">重叠时自动换行</option><option value="cols2">重叠时排成双列</option>
+                        </select></div>
+                      <div />
                     </div>
                     <div className="ps-sec">页头页尾配置</div>
                     <div className="ps-row"><span>显示页头页尾</span>

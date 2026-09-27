@@ -417,7 +417,7 @@ var state = {
   margins: { t:15, r:15, b:15, l:15 },   /* v1.0 四边边距(mm) */
   editPanel: "comp",                      /* v1.0 侧栏面板: comp|data|page|setting|inspector */
   dsTab: "field", dsSearch: "", loopOpen: false,   /* v1.0 数据源面板状态 */
-  pgSet: { rotate:"default", continuous:false, hfShow:false, hfGap:2.82, mirror:false, hideFirst:false },
+  pgSet: { rotate:"default", continuous:false, hfShow:false, hfGap:2.82, mirror:false, hideFirst:false, layoutMode:"off" },
   appSet: { fontPt:10, lineHeight:1.5, paraGap:0, wmMode:"text", wmText:"" }
 };
 var nextId = 100;
@@ -869,6 +869,9 @@ function renderPanelPage(){
   html += '<div class="ps-sec">打印选项</div>';
   html += '<div class="ps-grid"><div><label>打印旋转 ⓘ</label><select id="psRot"><option value="default">默认</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></div>';
   html += '<div><label>连续页面 ⓘ</label><div style="padding:5px 0"><label class="sw"><input type="checkbox" id="psCont"'+(g.continuous?" checked":"")+'><i></i></label></div></div></div>';
+  /* v1.5 自动排版：控件重叠时不允许堆叠，自动换行或排成双列 */
+  html += '<div class="ps-sec">自动排版</div>';
+  html += '<div class="ps-grid"><div><label>堆叠处理 ⓘ</label><select id="psLayout"><option value="off">不重排</option><option value="wrap">重叠时自动换行</option><option value="cols2">重叠时排成双列</option></select></div><div></div></div>';
   html += '<div class="ps-sec">页头页尾配置</div>';
   html += '<div class="ps-row"><span>显示页头页尾</span><label class="sw"><input type="checkbox" id="psHf"'+(g.hfShow?" checked":"")+'><i></i></label></div>';
   if(g.hfShow){
@@ -975,6 +978,7 @@ function bindEditPanel(side){
   });
   var pr = $("psPer"); if(pr){ pr.addEventListener("input", function(){ state.perPage = +this.value || 8; renderAll(); saveState(); }); }
   var prr = $("psRot"); if(prr){ prr.value = state.pgSet.rotate; prr.addEventListener("change", function(){ state.pgSet.rotate = this.value; saveState(); }); }
+  var ply = $("psLayout"); if(ply){ ply.value = state.pgSet.layoutMode || "off"; ply.addEventListener("change", function(){ state.pgSet.layoutMode = this.value; saveState(); }); } /* v1.5 自动排版 */
   var pc = $("psCont"); if(pc) pc.addEventListener("change", function(){ state.pgSet.continuous = this.checked; saveState(); });
   var ph = $("psHf"); if(ph) ph.addEventListener("change", function(){ state.pgSet.hfShow = this.checked; renderSide(); saveState(); });
   var phh = $("psHh"); if(phh) phh.addEventListener("input", function(){ state.pgSet.hfGap = +this.value || 2.82; saveState(); });
@@ -1277,6 +1281,7 @@ function bindElDrag(div, el){
     function onUp(){
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      if(autoReflow()) renderContent(); /* v1.5 拖动结束后重叠自动重排 */
       commit(); saveState();
     }
     document.addEventListener("mousemove", onMove);
@@ -1298,6 +1303,7 @@ function bindElDrag(div, el){
       function onUp(){
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
+        if(autoReflow()) renderContent(); /* v1.5 缩放后重叠自动重排 */
         commit(); saveState();
       }
       document.addEventListener("mousemove", onMove);
@@ -1383,6 +1389,57 @@ function innerArea(){
   var s = SIZES[state.paper];
   return { w: (state.landscape ? s[1] : s[0]) - state.margins.l - state.margins.r, h: (state.landscape ? s[0] : s[1]) - state.margins.t - state.margins.b };
 }
+
+/* ===== v1.5 自动排版：重叠检测 + 流式重排（不允许堆叠） ===== */
+function rectsOverlap(a, b){
+  return a.x < b.x + b.w - 0.5 && a.x + a.w > b.x + 0.5 &&
+         a.y < b.y + b.h - 0.5 && a.y + a.h > b.y + 0.5;
+}
+function reflowList(){ /* 参与重排的元素（分隔线除外）；filter 产生新数组，sort 不影响原数据 */
+  return els().filter(function(e){ return e.type !== "line"; });
+}
+function hasOverlapEls(){
+  var list = reflowList();
+  for(var i = 0; i < list.length; i++)
+    for(var j = i + 1; j < list.length; j++)
+      if(rectsOverlap(list[i], list[j])) return true;
+  return false;
+}
+function reflowEls(mode){
+  var a = innerArea(), gap = 3;
+  var list = reflowList().sort(function(p, q){ return p.y - q.y || p.x - q.x; }); /* 保持用户大致视觉顺序 */
+  if(mode === "cols2"){
+    /* 双列贪心：每次放到较矮的一列；宽于半列的元素（如宽表格）独占整行 */
+    var half = (a.w - gap) / 2, colY = [0, 0];
+    list.forEach(function(e){
+      if(e.w > half + 1){
+        var yMax = Math.max(colY[0], colY[1]);
+        e.x = 0; e.y = yMax;
+        colY[0] = yMax + e.h + gap; colY[1] = yMax + e.h + gap;
+      } else {
+        var c = colY[0] <= colY[1] ? 0 : 1;
+        e.x = c ? Math.round((half + gap) * 10) / 10 : 0;
+        e.y = colY[c];
+        colY[c] += e.h + gap;
+      }
+    });
+  } else { /* wrap：行式装箱，一行装不下自动换行 */
+    var curX = 0, curY = 0, rowH = 0;
+    list.forEach(function(e){
+      if(curX > 0 && curX + e.w > a.w + 0.5){ curY += rowH + gap; curX = 0; rowH = 0; }
+      e.x = curX; e.y = curY;
+      curX += e.w + gap;
+      rowH = Math.max(rowH, e.h);
+    });
+  }
+}
+function autoReflow(){ /* 触发式重排：仅在开启模式且存在重叠时执行，返回是否发生重排 */
+  var mode = state.pgSet.layoutMode;
+  if(!mode || mode === "off") return false;
+  if(!hasOverlapEls()) return false;
+  reflowEls(mode);
+  return true;
+}
 function alignSel(el, dir){
   var a = innerArea();
   if(dir==="left") el.x = 0;
@@ -1450,6 +1507,7 @@ document.addEventListener("drop", function(e){
     w: d.w, h: d.h, props: JSON.parse(JSON.stringify(d.props)) };
   els().push(el);
   state.selectedId = el.id;
+  autoReflow(); /* v1.5 拖入元素与现有元素重叠时自动重排 */
   renderContent();
   commit();
   saveState();
