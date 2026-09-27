@@ -910,7 +910,7 @@ export default function App() {
                   <tr key={i}>
                     {fs.map((f, ci) => (
                       <td key={f + "-" + ci}>
-                        <span className="fld-chip chip-ok at-chip" title="点击更换或删除此列"
+                        <span className="fld-chip chip-ok at-chip" title="点击更改或删除此列"
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => { e.stopPropagation(); handleAtChipClick(e.currentTarget, el.id, ci); }}>
                           {chipLabel(f)} <i className="chip-caret">⌄</i>
@@ -1584,8 +1584,8 @@ body{margin:0;background:#eee;font-family:"Microsoft YaHei",sans-serif}
                 <div className="chip-pop" style={{ left: atPop.x + "px", top: atPop.y + "px" }}
                   onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
                   <span className="cp-name" title={atPop.field}>[{atPop.field}]</span>
-                  <button className="cp-btn" onClick={() => { const p = atPop; setAtPop(null); if (p) openAutoColDlg(p.elId, p.col); }}>更换</button>
-                  <button className="cp-btn" title="删除此列" onClick={() => { const p = atPop; setAtPop(null); if (p) deleteColAt(p.elId, p.col); }}>🗑</button>
+                  <button className="cp-btn" onClick={() => { const p = atPop; setAtPop(null); if (p) openAutoColDlg(p.elId, p.col); }}>更改</button>
+                  <button className="cp-btn" title="删除此列" onClick={() => { const p = atPop; setAtPop(null); if (p) deleteColAt(p.elId, p.col); }}>删除</button>
                   {!atPop.ok && <div className="atp-warn">字段改名或被删除</div>}
                 </div>
               )}

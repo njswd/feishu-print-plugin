@@ -389,6 +389,8 @@
   padding: 0; flex: none; background: transparent;
 }
 .el .content.editable { pointer-events: auto; }
+/* v1.4 修复：自动表格内容区恢复可点击（否则 chip/列头/＋ 全部点击穿透，气泡弹不出） */
+.el .content.el-autotable { pointer-events: auto; }
 .el .content[contenteditable]:focus { outline: 1px dashed var(--blue); }
 .resize-handle {
   position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
